@@ -12,6 +12,7 @@
 
 ## Repository Documentation
 Consult project specifications and architectural guides before making structural changes:
+- `GAME_SPEC.md`: Canonical Single Source of Truth for vision, core loop, death/revive rules, NPCs, and v1 launch scope.
 - `README.md`: Project overview, toolchain quickstart, Team Create sync rules, and baseline status.
 - `docs/GAME_DESIGN_AND_RESEARCH.md`: Core gameplay loop, story beats, horror atmosphere, 1–4 player scaling, and roadmap.
 - `docs/ARCHITECTURE_AND_WORKFLOW.md`: Server/Client/Shared module architecture, Rojo sync boundaries, streaming safety, and Git workflow.

@@ -72,7 +72,9 @@ To prevent data loss, conflicts, and sync desynchronization:
 
 Detailed specifications, design documentation, and architectural guidelines are maintained in the repository:
 
+- [GAME_SPEC.md](file:///c:/Users/sanch/Projects/horror-game/GAME_SPEC.md) – **Canonical Single Source of Truth** (core loop, multiplayer/revive rules, Toad-Maker safe room, NPC contracts, and v1 launch scope).
 - [AGENTS.md](file:///c:/Users/sanch/Projects/horror-game/AGENTS.md) – Strict tool boundaries, role splits, and development constraints.
+- [docs/MILESTONES_AND_CHECKINS.md](file:///c:/Users/sanch/Projects/horror-game/docs/MILESTONES_AND_CHECKINS.md) – Milestone gates and recurring 4-point progress check-in plan.
 - [docs/GAME_DESIGN_AND_RESEARCH.md](file:///c:/Users/sanch/Projects/horror-game/docs/GAME_DESIGN_AND_RESEARCH.md) – Core gameplay loop, story beats, horror research, co-op scaling, monetization/retention, and proposed roadmap.
 - [docs/ARCHITECTURE_AND_WORKFLOW.md](file:///c:/Users/sanch/Projects/horror-game/docs/ARCHITECTURE_AND_WORKFLOW.md) – Client/Server/Shared module map, Rojo sync rules, `StreamingEnabled` safety, input contracts, and Git branch workflows.
 - [docs/STUDIO_ASSET_SPEC.md](file:///c:/Users/sanch/Projects/horror-game/docs/STUDIO_ASSET_SPEC.md) – Studio instance names, anchor contracts, streaming configurations, audio hooks, and UI button hierarchy.

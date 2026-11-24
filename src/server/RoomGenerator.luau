@@ -42,12 +42,73 @@ local function getRoomAnchors(room: Model): (BasePart?, BasePart?)
 	return nil, nil
 end
 
+local function buildSafeRoomTemplate(): Model
+	local model = Instance.new("Model")
+	model.Name = "ToadMakerSafeRoom"
+	model.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
+	model:SetAttribute("SafeRoom", true)
+	model:SetAttribute("SurveyDressing", false)
+
+	local function part(name: string, size: Vector3, cf: CFrame, color: Color3, mat: Enum.Material, collide: boolean)
+		local p = Instance.new("Part")
+		p.Name = name
+		p.Size = size
+		p.CFrame = cf
+		p.Color = color
+		p.Material = mat
+		p.Anchored = true
+		p.CanCollide = collide
+		p.CanQuery = collide
+		p.CanTouch = false
+		p.TopSurface = Enum.SurfaceType.Smooth
+		p.BottomSurface = Enum.SurfaceType.Smooth
+		p.Parent = model
+		return p
+	end
+
+	local concrete = Color3.fromRGB(68, 72, 68)
+	local timber = Color3.fromRGB(58, 42, 30)
+	part("Floor", Vector3.new(22, 1, 26), CFrame.new(0, -0.5, 0), concrete, Enum.Material.Concrete, true)
+	part("Ceiling", Vector3.new(22, 1, 26), CFrame.new(0, 11.5, 0), timber, Enum.Material.WoodPlanks, true)
+	part("WallLeft", Vector3.new(1, 11, 26), CFrame.new(-10.5, 5.5, 0), concrete, Enum.Material.Concrete, true)
+	part("WallRight", Vector3.new(1, 11, 26), CFrame.new(10.5, 5.5, 0), concrete, Enum.Material.Concrete, true)
+
+	local function anchor(name: string, pos: Vector3, lookDir: Vector3): Part
+		local a = Instance.new("Part")
+		a.Name = name
+		a.Size = Vector3.new(4, 7, 1)
+		a.CFrame = CFrame.lookAt(pos, pos + lookDir)
+		a.Transparency = 1
+		a.CanCollide = false
+		a.CanQuery = false
+		a.CanTouch = false
+		a.Anchored = true
+		a.Parent = model
+		return a
+	end
+
+	local ent = anchor("Entrance", Vector3.new(0, 3.5, -12.5), Vector3.new(0, 0, 1))
+	anchor("Exit", Vector3.new(0, 3.5, 12.5), Vector3.new(0, 0, -1))
+	model.PrimaryPart = ent
+	return model
+end
+
 function RoomGenerator.generate(numRooms: number): { Model }
 	local templatesFolder = ReplicatedStorage:WaitForChild("RoomTemplates", 10)
 	assert(templatesFolder, "RoomTemplates folder not found in ReplicatedStorage!")
 
-	local templates = templatesFolder:GetChildren()
-	assert(#templates > 0, "No room templates found in ReplicatedStorage.RoomTemplates!")
+	local templates = {}
+	local safeTemplate: Model? = nil
+	for _, item in templatesFolder:GetChildren() do
+		if item:IsA("Model") then
+			if item.Name == "ToadMakerSafeRoom" or item:GetAttribute("SafeRoom") == true then
+				safeTemplate = item
+			else
+				table.insert(templates, item)
+			end
+		end
+	end
+	assert(#templates > 0, "No hazard room templates found in ReplicatedStorage.RoomTemplates!")
 
 	local dungeonFolder = Workspace:FindFirstChild("GeneratedDungeon")
 	if not dungeonFolder then
@@ -61,12 +122,17 @@ function RoomGenerator.generate(numRooms: number): { Model }
 	local spawnedRooms: { Model } = {}
 	local currentExitCF: CFrame = CFrame.new(0, 0, 0)
 	local spawnPad = Workspace:FindFirstChild("StartSpawn")
+	local safeSlot = if numRooms >= 4 then math.ceil(numRooms / 2) else 0
 
 	local random = Random.new()
 
 	for roomIndex = 1, numRooms do
 		local placed = false
 		local availableTemplates = table.clone(templates)
+		if roomIndex == safeSlot then
+			local safeRoomModel = safeTemplate or buildSafeRoomTemplate()
+			availableTemplates = { safeRoomModel }
+		end
 
 		while #availableTemplates > 0 do
 			local templateIndex = random:NextInteger(1, #availableTemplates)
@@ -75,6 +141,10 @@ function RoomGenerator.generate(numRooms: number): { Model }
 			local candidate = chosenTemplate:Clone()
 			candidate.Name = string.format("Room_%02d_%s", roomIndex, chosenTemplate.Name)
 			candidate.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
+			if roomIndex == safeSlot then
+				candidate:SetAttribute("SafeRoom", true)
+				candidate:SetAttribute("SurveyDressing", false)
+			end
 
 			local entrance, exit = getRoomAnchors(candidate)
 			if not entrance or not exit then

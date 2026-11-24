@@ -1,24 +1,24 @@
 --!strict
 --[[
-  FlashlightController  –  Camera-aligned flashlight with a warm hotspot and narrow spill.
+  FlashlightController  –  Atmospheric horror detached flashlight system.
 
-  Input binding hierarchy (highest priority first):
-    1. ContextActionService action "ToggleFlashlight"
-       • KeyCode.F  (keyboard)
-       • KeyCode.ButtonY  (gamepad)
-       • Touch InputBinding via HUD button (GameHUD/FlashlightButton) if present,
-         else a runtime ScreenGui fallback button is created automatically.
-    2. HapticEffect (UIClick pulse) fires on mobile toggle and anomaly flicker start.
-
-  Co-op replication:
-    • toggle() fires ReplicatedStorage/FlashlightRemotes/ToggleState → server
-      broadcasts to all other clients → they show/hide the SpotLight on the
-      character's torso attachment (see FlashlightReplicator.luau server side).
-
-  Battery:
-    • Drains at DRAIN_RATE_PER_SEC while enabled, auto-off at 0%.
-    • triggerAnomalyFlicker(duration, intensity) pauses drain during flicker.
-    • getBattery() returns current 0–100 value for HUD display.
+  Core features:
+    1. Detached Smooth Camera Tracking:
+       Drives an invisible, anchored, non-collidable Part ("FlashlightEmitter")
+       in Workspace via RunService:BindToRenderStep using exponential damping
+       (1 - math.exp(-LagStiffness * dt)) and CFrame:Lerp().
+    2. Layered Movement Sway:
+       Blends idle breathing sway with walk-bobbing driven by Humanoid.MoveDirection.
+    3. Dual-Cone Lighting + Volumetric Beam:
+       Narrow shadow-casting CoreSpotLight + wide soft SpillSpotLight + subtle
+       high-transparency volumetric dust Beam (see FlashlightOptics.luau).
+    4. Tactile Audio & Modular Flicker:
+       Randomized toggle click PlaybackSpeed (0.95–1.05) and organic
+       triggerFlicker(duration, intensity) callable by monsters or battery logic.
+    5. Co-op Replication, Mobile Touch & Cosmetics:
+       Fires ReplicatedStorage/FlashlightRemotes/ToggleState, supports
+       GameHUD/FlashlightButton (or automatic mobile fallback), HapticService,
+       and ShopCatalog cosmetic tints / battery gifts.
 ]]
 
 local ContextActionService = game:GetService("ContextActionService")
@@ -26,16 +26,39 @@ local HapticService = game:GetService("HapticService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local StarterGui = game:GetService("StarterGui")
 local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 
 local FlashlightOptics = require(script.Parent.FlashlightOptics)
 local FlashlightController = {}
 
--- ── Configuration ──────────────────────────────────────────────────────────
+-- ── Configuration (tweak all feel/visual values here) ────────────────────────
 local CONFIG = {
+	ToggleKey = Enum.KeyCode.F,
+	GamepadToggleKey = Enum.KeyCode.ButtonY,
+	LagStiffness = 12, -- Lower = heavier drag, Higher = snappier aim
+	IdleSwaySpeed = 1.6,
+	IdleSwayAmount = 0.025,
+	WalkBobSpeed = 9.0,
+	WalkBobAmount = 0.06,
+	CoreAngle = 42,
+	CoreBrightness = 3.5,
+	CoreRange = 45,
+	CoreColor = Color3.fromRGB(255, 248, 235),
+	SpillAngle = 95,
+	SpillBrightness = 0.75,
+	SpillRange = 26,
+	SpillColor = Color3.fromRGB(235, 240, 255),
+	FillBrightness = 0.25,
+	FillRange = 10,
+	BeamLength = 14,
+	BeamWidth0 = 0.35,
+	BeamWidth1 = 5.5,
 	MAX_BATTERY = 100,
 	DRAIN_RATE_PER_SEC = 0.5, -- ~200 s runtime
+	LOW_BATTERY_THRESHOLD = 15,
+	TELEPORT_SNAP_DISTANCE = 25,
 }
 
 local ACTION_NAME = "ToggleFlashlight"
@@ -44,19 +67,25 @@ local RENDER_STEP = "AimFlashlight"
 -- ── State ───────────────────────────────────────────────────────────────────
 local player = Players.LocalPlayer
 
-local isEnabled = false
+local isOn = false
 local battery = CONFIG.MAX_BATTERY
 local isFlickering = false
+local flickerMultiplier = 1
+local flickerToken = 0
 
-local _lightModel: Model? = nil
-local lightRoot: Part? = nil
-local primarySpot: SpotLight? = nil
-local warmSpill: SpotLight? = nil
-local toggleSound: Sound? = nil
+local emitterPart: Part? = nil
+local coreLight: SpotLight? = nil
+local spillLight: SpotLight? = nil
+local fillLight: PointLight? = nil
+local dustBeam: Beam? = nil
+local clickSound: Sound? = nil
+
+local currentCFrame = CFrame.new()
+local swayTime = 0
+local walkBlend = 0
 
 -- ── Helpers ─────────────────────────────────────────────────────────────────
 local function hapticPulse()
-	-- Vibrate left-hand motor briefly on supported gamepads / mobile.
 	local ok = pcall(function()
 		HapticService:SetMotor(Enum.UserInputType.Gamepad1, Enum.VibrationMotor.LeftHand, 0.3)
 	end)
@@ -69,49 +98,50 @@ local function hapticPulse()
 	end
 end
 
--- ── Light Rig ───────────────────────────────────────────────────────────────
-local function createFlashlightRig(): (Model, Part, SpotLight, SpotLight, Sound)
-	local rig = Instance.new("Model")
-	rig.Name = "ClientFlashlightRig"
+local function createFlashlightEmitter(): (Part, SpotLight, SpotLight, PointLight, Beam, Sound)
+	local emitter = Instance.new("Part")
+	emitter.Name = "FlashlightEmitter"
+	emitter.Size = Vector3.new(0.2, 0.2, 0.2)
+	emitter.Transparency = 1
+	emitter.Anchored = true
+	emitter.CanCollide = false
+	emitter.CanQuery = false
+	emitter.CanTouch = false
+	emitter.CastShadow = false
 
-	local root = Instance.new("Part")
-	root.Name = "LightMount"
-	root.Size = Vector3.new(0.05, 0.05, 0.05)
-	root.CastShadow = false
 	local camera = Workspace.CurrentCamera
 	if camera then
-		root.CFrame = camera.CFrame
+		currentCFrame = camera.CFrame * CFrame.new(0, 0, -0.5)
+		emitter.CFrame = currentCFrame
 	end
-	root.Transparency = 1
-	root.CanCollide = false
-	root.CanQuery = false
-	root.CanTouch = false
-	root.Anchored = true
-	root.Parent = rig
+	emitter.Parent = Workspace
 
-	local hotspot, spill = FlashlightOptics.localBeam(root)
+	local core, spill, fill, beam = FlashlightOptics.localBeam(emitter, CONFIG)
 
-	-- Toggle click SFX
-	local sfx = Instance.new("Sound")
-	sfx.Name = "ClickSound"
-	sfx.SoundId = "rbxasset://sounds/electronicpingshort.wav"
-	sfx.Volume = 0.5
-	sfx.Parent = root
+	-- Optional pre-authored Sound child named "ClickSound" inside this script, or fallback SFX
+	local existingClick = script:FindFirstChild("ClickSound")
+	local sfx: Sound
+	if existingClick and existingClick:IsA("Sound") then
+		sfx = existingClick
+	else
+		sfx = Instance.new("Sound")
+		sfx.Name = "ClickSound"
+		sfx.SoundId = "rbxasset://sounds/electronicpingshort.wav"
+		sfx.Volume = 0.45
+		sfx.Parent = emitter
+	end
 
-	rig.Parent = Workspace
-	return rig, root, hotspot, spill, sfx
+	return emitter, core, spill, fill, beam, sfx
 end
 
--- ── Touch HUD Button (created if GameHUD/FlashlightButton not present) ──────
 local function ensureTouchButton()
-	-- Try to find the button created by the Creative Lead first.
 	local hud = player.PlayerGui:FindFirstChild("GameHUD")
-	if not hud and game:GetService("StarterGui"):FindFirstChild("GameHUD") then
+	if not hud and StarterGui:FindFirstChild("GameHUD") then
 		hud = player.PlayerGui:WaitForChild("GameHUD", 5)
 	end
-	if hud and hud:FindFirstChild("FlashlightButton") and hud.FlashlightButton:IsA("GuiButton") then
-		local btn = hud:FindFirstChild("FlashlightButton") :: GuiButton
-		btn.Activated:Connect(function()
+	local authored = hud and hud:FindFirstChild("FlashlightButton")
+	if authored and authored:IsA("GuiButton") then
+		authored.Activated:Connect(function()
 			FlashlightController.toggle()
 		end)
 		return
@@ -121,7 +151,6 @@ local function ensureTouchButton()
 		return
 	end
 
-	-- Runtime fallback ScreenGui with a simple torch button.
 	local gui = Instance.new("ScreenGui")
 	gui.Name = "FlashlightHUD_Fallback"
 	gui.ResetOnSpawn = false
@@ -153,56 +182,74 @@ end
 
 -- ── Core API ─────────────────────────────────────────────────────────────────
 function FlashlightController.setLights(state: boolean)
-	if primarySpot then
-		primarySpot.Enabled = state
+	if coreLight then
+		coreLight.Enabled = state
 	end
-	if warmSpill then
-		warmSpill.Enabled = state
+	if spillLight then
+		spillLight.Enabled = state
+	end
+	if fillLight then
+		fillLight.Enabled = state
+	end
+	if dustBeam then
+		dustBeam.Enabled = state
 	end
 end
 
-function FlashlightController.toggle()
-	local enabled = battery > 0 and not isEnabled
-	if enabled == isEnabled then
+function FlashlightController.setFlashlightState(state: boolean)
+	local targetState = battery > 0 and state
+	if targetState == isOn then
 		return
 	end
-	isEnabled = enabled
-	if toggleSound then
-		toggleSound:Play()
-	end
-	FlashlightController.setLights(isEnabled)
+	isOn = targetState
+	FlashlightController.setLights(isOn)
 
-	-- Replicate to server for co-op teammate SpotLight visibility.
+	if clickSound then
+		clickSound.PlaybackSpeed = math.random(95, 105) / 100
+		clickSound:Play()
+	end
+
 	local remotes = ReplicatedStorage:FindFirstChild("FlashlightRemotes")
 	if remotes then
 		local ev = remotes:FindFirstChild("ToggleState") :: RemoteEvent?
 		if ev then
-			ev:FireServer(isEnabled)
+			ev:FireServer(isOn)
 		end
 	end
 end
 
-function FlashlightController.triggerAnomalyFlicker(duration: number, intensity: number)
-	if not isEnabled or isFlickering then
+function FlashlightController.toggle()
+	FlashlightController.setFlashlightState(not isOn)
+end
+
+-- Modular organic bulb flicker (callable by entities, anomalies, or low battery)
+function FlashlightController.triggerFlicker(duration: number, intensity: number)
+	if not isOn then
 		return
 	end
+	flickerToken += 1
+	local token = flickerToken
 	isFlickering = true
-	hapticPulse() -- tactile cue on anomaly start
+	hapticPulse()
 
 	task.spawn(function()
 		local elapsed = 0
-		while elapsed < duration and isEnabled do
-			local flickerOn = math.random() > (0.3 * intensity)
-			FlashlightController.setLights(flickerOn)
-			FlashlightOptics.setIntensity(primarySpot, warmSpill, 0.3 + math.random() * 0.7)
-			local step = math.random(3, 8) / 100
-			task.wait(step)
-			elapsed += step
+		while elapsed < duration and isOn and token == flickerToken do
+			local dt = task.wait()
+			elapsed += dt
+			local targetMult = math.max(0.05, 1 - (math.random() * intensity))
+			flickerMultiplier += (targetMult - flickerMultiplier) * 0.35
 		end
-		FlashlightOptics.setIntensity(primarySpot, warmSpill, 1)
-		FlashlightController.setLights(isEnabled)
-		isFlickering = false
+		if token == flickerToken then
+			flickerMultiplier = 1
+			isFlickering = false
+		end
 	end)
+end
+
+-- Backwards-compatible alias for NPCManager / FlickerRequest callers
+function FlashlightController.triggerAnomalyFlicker(duration: number, intensity: number)
+	FlashlightController.triggerFlicker(duration, intensity)
 end
 
 function FlashlightController.getBattery(): number
@@ -213,22 +260,32 @@ function FlashlightController.recharge(amount: number)
 	battery = math.clamp(battery + amount, 0, CONFIG.MAX_BATTERY)
 end
 
+function FlashlightController.drainBattery(amount: number)
+	battery = math.clamp(battery - amount, 0, CONFIG.MAX_BATTERY)
+	if battery <= 0 and isOn then
+		FlashlightController.setFlashlightState(false)
+	end
+end
+
 -- ── Initialisation ──────────────────────────────────────────────────────────
 function FlashlightController.init()
 	Workspace:GetAttributeChangedSignal("ExpeditionNumber"):Connect(function()
 		battery = CONFIG.MAX_BATTERY
-		if not isEnabled then
+		flickerMultiplier = 1
+		if not isOn then
 			FlashlightController.toggle()
 		end
 	end)
-	local rig, root, spot, spill, sfx = createFlashlightRig()
-	_lightModel = rig
-	lightRoot = root
-	primarySpot = spot
-	warmSpill = spill
-	toggleSound = sfx
 
-	-- ContextActionService binding (keyboard + gamepad + mobile sink).
+	local emitter, core, spill, fill, beam, sfx = createFlashlightEmitter()
+	emitterPart = emitter
+	coreLight = core
+	spillLight = spill
+	fillLight = fill
+	dustBeam = beam
+	clickSound = sfx
+
+	-- ContextActionService binding (keyboard F + gamepad ButtonY)
 	ContextActionService:BindAction(
 		ACTION_NAME,
 		function(_name: string, state: Enum.UserInputState, _input: InputObject)
@@ -238,20 +295,23 @@ function FlashlightController.init()
 			return Enum.ContextActionResult.Sink
 		end,
 		false,
-		Enum.KeyCode.F,
-		Enum.KeyCode.ButtonY
+		CONFIG.ToggleKey,
+		CONFIG.GamepadToggleKey
 	)
 
 	ensureTouchButton()
 
-	-- Wire server->client flicker request from NPCManager & cosmetic tint / battery gift hooks.
+	-- Wire entity flicker requests, cosmetic tints, and battery gifts
 	task.spawn(function()
 		local remotes = ReplicatedStorage:WaitForChild("FlashlightRemotes", 10)
 		if remotes then
 			local flickerEv = remotes:WaitForChild("FlickerRequest", 10) :: RemoteEvent?
 			if flickerEv then
-				flickerEv.OnClientEvent:Connect(function(dur: number, intensity: number)
-					FlashlightController.triggerAnomalyFlicker(dur, intensity)
+				flickerEv.OnClientEvent:Connect(function(dur: number, intensity: number, drainAmount: number?)
+					if typeof(drainAmount) == "number" and drainAmount > 0 then
+						FlashlightController.drainBattery(drainAmount)
+					end
+					FlashlightController.triggerFlicker(dur, intensity)
 				end)
 			end
 		end
@@ -262,9 +322,27 @@ function FlashlightController.init()
 			local catalog = require(catalogMod) :: { Tints: { [string]: { hotspotColor: Color3, spillColor: Color3 } } }
 			local function applyTint()
 				local tintId = player:GetAttribute("FlashlightTint")
+				if tintId == "StandardHalogen" then
+					FlashlightOptics.setTint(
+						coreLight,
+						spillLight,
+						fillLight,
+						dustBeam,
+						CONFIG.CoreColor,
+						CONFIG.SpillColor
+					)
+					return
+				end
 				local tint = if typeof(tintId) == "string" then catalog.Tints[tintId] else nil
 				if tint then
-					FlashlightOptics.setTint(primarySpot, warmSpill, tint.hotspotColor, tint.spillColor)
+					FlashlightOptics.setTint(
+						coreLight,
+						spillLight,
+						fillLight,
+						dustBeam,
+						tint.hotspotColor,
+						tint.spillColor
+					)
 				end
 			end
 			player:GetAttributeChangedSignal("FlashlightTint"):Connect(applyTint)
@@ -282,35 +360,77 @@ function FlashlightController.init()
 		end
 	end)
 
-	-- Battery drain + camera-tracking render loop.
+	-- Frame-rate-independent smooth camera tracking + layered sway + battery/flicker
 	RunService:BindToRenderStep(RENDER_STEP, Enum.RenderPriority.Camera.Value + 1, function(dt: number)
+		swayTime += dt
+
 		local camera = Workspace.CurrentCamera
-		if camera and lightRoot then
-			lightRoot.CFrame = camera.CFrame
+		if camera and emitterPart then
+			local character = player.Character
+			local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+			local isMoving = humanoid ~= nil
+				and humanoid.MoveDirection.Magnitude > 0.1
+				and humanoid.FloorMaterial ~= Enum.Material.Air
+
+			local targetWalkBlend = if isMoving then 1 else 0
+			walkBlend += (targetWalkBlend - walkBlend) * math.min(1, dt * 8)
+
+			local idleX = math.cos(swayTime * CONFIG.IdleSwaySpeed) * CONFIG.IdleSwayAmount
+			local idleY = math.sin(swayTime * CONFIG.IdleSwaySpeed * 2) * CONFIG.IdleSwayAmount
+
+			local walkX = math.cos(swayTime * CONFIG.WalkBobSpeed) * CONFIG.WalkBobAmount * walkBlend
+			local walkY = math.abs(math.sin(swayTime * CONFIG.WalkBobSpeed)) * -CONFIG.WalkBobAmount * walkBlend
+
+			local swayOffset = CFrame.new(idleX + walkX, idleY + walkY, -0.5)
+			local targetCFrame = camera.CFrame * swayOffset
+
+			if (currentCFrame.Position - targetCFrame.Position).Magnitude > CONFIG.TELEPORT_SNAP_DISTANCE then
+				currentCFrame = targetCFrame
+			else
+				local alpha = 1 - math.exp(-CONFIG.LagStiffness * dt)
+				currentCFrame = currentCFrame:Lerp(targetCFrame, alpha)
+			end
+
+			emitterPart.CFrame = currentCFrame
 		end
 
-		if isEnabled and not isFlickering then
-			battery = math.clamp(battery - CONFIG.DRAIN_RATE_PER_SEC * dt, 0, CONFIG.MAX_BATTERY)
-			if battery <= 0 then
-				FlashlightController.toggle()
+		if isOn then
+			if not isFlickering then
+				battery = math.clamp(battery - CONFIG.DRAIN_RATE_PER_SEC * dt, 0, CONFIG.MAX_BATTERY)
+				if battery <= 0 then
+					FlashlightController.setFlashlightState(false)
+					return
+				elseif battery <= CONFIG.LOW_BATTERY_THRESHOLD and math.random() < dt * 0.45 then
+					FlashlightController.triggerFlicker(0.35, 0.55)
+				end
+			end
+
+			if coreLight then
+				coreLight.Brightness = CONFIG.CoreBrightness * flickerMultiplier
+			end
+			if spillLight then
+				spillLight.Brightness = CONFIG.SpillBrightness * flickerMultiplier
+			end
+			if fillLight then
+				fillLight.Brightness = CONFIG.FillBrightness * flickerMultiplier
 			end
 		end
 	end)
 
-	print("[FlashlightController] Initialised. Input: F / ButtonY / touch button.")
+	print("[FlashlightController] Initialised. Smooth camera tracking + dual-cone + volumetric beam.")
 end
 
--- Cleanup (call when character dies / round ends).
 function FlashlightController.destroy()
 	ContextActionService:UnbindAction(ACTION_NAME)
 	RunService:UnbindFromRenderStep(RENDER_STEP)
-	if _lightModel then
-		_lightModel:Destroy()
-		_lightModel = nil
-		lightRoot = nil
-		primarySpot = nil
-		warmSpill = nil
-		toggleSound = nil
+	if emitterPart then
+		emitterPart:Destroy()
+		emitterPart = nil
+		coreLight = nil
+		spillLight = nil
+		fillLight = nil
+		dustBeam = nil
+		clickSound = nil
 	end
 end
 

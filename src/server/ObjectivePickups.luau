@@ -83,9 +83,11 @@ function ObjectivePickups.spawn(
 
 		local kind = if i % 2 == 0 and i <= fuseTotal * 2 then "Fuse" else "Key"
 		local socketForPickup = if kind == "Fuse" then station else nil
-		local room = if socketForPickup
-			then first
-			else rooms[math.clamp(math.ceil(i * #rooms / (total + 1)), 1, #rooms)]
+		local idx = math.clamp(math.ceil(i * #rooms / (total + 1)), 1, #rooms)
+		if not socketForPickup and rooms[idx]:GetAttribute("SafeRoom") == true and #rooms > 1 then
+			idx = if idx < #rooms then idx + 1 else idx - 1
+		end
+		local room = if socketForPickup then first else rooms[idx]
 		local slot = (slots[room] or 0) + 1
 		if socketForPickup then
 			station = nil

@@ -57,11 +57,35 @@ function SpectatorController.init()
 	label.Text = "Spectating"
 	label.Parent = bar
 
+	local reviveBtn = Instance.new("TextButton")
+	reviveBtn.Name = "ReviveTokenButton"
+	reviveBtn.AnchorPoint = Vector2.new(0.5, 1)
+	reviveBtn.Size = UDim2.fromOffset(220, 38)
+	reviveBtn.Position = UDim2.new(0.5, 0, 1, -76)
+	reviveBtn.BackgroundColor3 = Color3.fromRGB(48, 108, 66)
+	reviveBtn.TextColor3 = Color3.fromRGB(245, 248, 240)
+	reviveBtn.Font = Enum.Font.GothamBold
+	reviveBtn.TextSize = 14
+	reviveBtn.Text = "Use Revive Token (1 left)"
+	reviveBtn.Visible = false
+	reviveBtn.Parent = gui
+	local revCorner = Instance.new("UICorner")
+	revCorner.CornerRadius = UDim.new(0, 8)
+	revCorner.Parent = reviveBtn
+
 	local index = 1
 	local matchRemotes = ReplicatedStorage:WaitForChild("MatchRemotes", 10)
+	local claimRevive = matchRemotes and matchRemotes:FindFirstChild("ClaimReviveToken")
+
+	reviveBtn.Activated:Connect(function()
+		if claimRevive and claimRevive:IsA("RemoteEvent") then
+			claimRevive:FireServer()
+		end
+	end)
 
 	local function restoreCamera()
 		gui.Enabled = false
+		reviveBtn.Visible = false
 		local camera = Workspace.CurrentCamera
 		local char = localPlayer.Character
 		local hum = char and char:FindFirstChildOfClass("Humanoid")
@@ -80,6 +104,10 @@ function SpectatorController.init()
 			end
 			return
 		end
+
+		local tokens = localPlayer:GetAttribute("ReviveTokens")
+		local claimed = localPlayer:GetAttribute("ReviveTokenClaimed") == true
+		reviveBtn.Visible = typeof(tokens) == "number" and tokens >= 1 and not claimed
 
 		local targets = getSurvivors()
 		if #targets == 0 then

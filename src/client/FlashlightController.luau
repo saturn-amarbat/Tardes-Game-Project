@@ -1,6 +1,6 @@
 --!strict
 --[[
-  FlashlightController  –  Client-side Slender-Man layered flashlight system.
+  FlashlightController  –  Camera-aligned flashlight with a warm hotspot and narrow spill.
 
   Input binding hierarchy (highest priority first):
     1. ContextActionService action "ToggleFlashlight"
@@ -29,26 +29,20 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 
+local FlashlightOptics = require(script.Parent.FlashlightOptics)
 local FlashlightController = {}
 
 -- ── Configuration ──────────────────────────────────────────────────────────
 local CONFIG = {
 	MAX_BATTERY = 100,
 	DRAIN_RATE_PER_SEC = 0.5, -- ~200 s runtime
-	SPOT_BRIGHTNESS = 2.8,
-	SPOT_RANGE = 60,
-	SPOT_ANGLE = 48,
-	AMBIENT_BRIGHTNESS = 0.45,
-	AMBIENT_RANGE = 14,
-	LIGHT_COLOR = Color3.fromRGB(245, 240, 220),
-	TWEEN_ROTATION_SPEED = 18,
 }
 
 local ACTION_NAME = "ToggleFlashlight"
+local RENDER_STEP = "AimFlashlight"
 
 -- ── State ───────────────────────────────────────────────────────────────────
 local player = Players.LocalPlayer
-local camera = Workspace.CurrentCamera
 
 local isEnabled = false
 local battery = CONFIG.MAX_BATTERY
@@ -57,7 +51,7 @@ local isFlickering = false
 local _lightModel: Model? = nil
 local lightRoot: Part? = nil
 local primarySpot: SpotLight? = nil
-local fillPoint: PointLight? = nil
+local warmSpill: SpotLight? = nil
 local toggleSound: Sound? = nil
 
 -- ── Helpers ─────────────────────────────────────────────────────────────────
@@ -76,13 +70,18 @@ local function hapticPulse()
 end
 
 -- ── Light Rig ───────────────────────────────────────────────────────────────
-local function createFlashlightRig(): (Model, Part, SpotLight, PointLight, Sound)
+local function createFlashlightRig(): (Model, Part, SpotLight, SpotLight, Sound)
 	local rig = Instance.new("Model")
 	rig.Name = "ClientFlashlightRig"
 
 	local root = Instance.new("Part")
 	root.Name = "LightMount"
-	root.Size = Vector3.new(0.4, 0.4, 0.8)
+	root.Size = Vector3.new(0.05, 0.05, 0.05)
+	root.CastShadow = false
+	local camera = Workspace.CurrentCamera
+	if camera then
+		root.CFrame = camera.CFrame
+	end
 	root.Transparency = 1
 	root.CanCollide = false
 	root.CanQuery = false
@@ -90,27 +89,7 @@ local function createFlashlightRig(): (Model, Part, SpotLight, PointLight, Sound
 	root.Anchored = true
 	root.Parent = rig
 
-	-- Primary crisp cone (shadows on)
-	local spot = Instance.new("SpotLight")
-	spot.Name = "PrimaryCone"
-	spot.Angle = CONFIG.SPOT_ANGLE
-	spot.Range = CONFIG.SPOT_RANGE
-	spot.Brightness = CONFIG.SPOT_BRIGHTNESS
-	spot.Color = CONFIG.LIGHT_COLOR
-	spot.Shadows = true
-	spot.Enabled = false
-	spot.Face = Enum.NormalId.Front
-	spot.Parent = root
-
-	-- Soft ambient fill (mobile/low-graphics friendly, no shadows)
-	local point = Instance.new("PointLight")
-	point.Name = "AmbientFill"
-	point.Range = CONFIG.AMBIENT_RANGE
-	point.Brightness = CONFIG.AMBIENT_BRIGHTNESS
-	point.Color = CONFIG.LIGHT_COLOR
-	point.Shadows = false
-	point.Enabled = false
-	point.Parent = root
+	local hotspot, spill = FlashlightOptics.localBeam(root)
 
 	-- Toggle click SFX
 	local sfx = Instance.new("Sound")
@@ -119,8 +98,8 @@ local function createFlashlightRig(): (Model, Part, SpotLight, PointLight, Sound
 	sfx.Volume = 0.5
 	sfx.Parent = root
 
-	rig.Parent = Workspace.CurrentCamera
-	return rig, root, spot, point, sfx
+	rig.Parent = Workspace
+	return rig, root, hotspot, spill, sfx
 end
 
 -- ── Touch HUD Button (created if GameHUD/FlashlightButton not present) ──────
@@ -177,19 +156,17 @@ function FlashlightController.setLights(state: boolean)
 	if primarySpot then
 		primarySpot.Enabled = state
 	end
-	if fillPoint then
-		fillPoint.Enabled = state
+	if warmSpill then
+		warmSpill.Enabled = state
 	end
 end
 
 function FlashlightController.toggle()
-	if battery <= 0 then
-		isEnabled = false
-		FlashlightController.setLights(false)
+	local enabled = battery > 0 and not isEnabled
+	if enabled == isEnabled then
 		return
 	end
-
-	isEnabled = not isEnabled
+	isEnabled = enabled
 	if toggleSound then
 		toggleSound:Play()
 	end
@@ -214,20 +191,15 @@ function FlashlightController.triggerAnomalyFlicker(duration: number, intensity:
 
 	task.spawn(function()
 		local elapsed = 0
-		local origBrightness = CONFIG.SPOT_BRIGHTNESS
 		while elapsed < duration and isEnabled do
 			local flickerOn = math.random() > (0.3 * intensity)
 			FlashlightController.setLights(flickerOn)
-			if primarySpot then
-				primarySpot.Brightness = flickerOn and (origBrightness * (0.3 + math.random() * 0.7)) or 0
-			end
+			FlashlightOptics.setIntensity(primarySpot, warmSpill, 0.3 + math.random() * 0.7)
 			local step = math.random(3, 8) / 100
 			task.wait(step)
 			elapsed += step
 		end
-		if primarySpot then
-			primarySpot.Brightness = origBrightness
-		end
+		FlashlightOptics.setIntensity(primarySpot, warmSpill, 1)
 		FlashlightController.setLights(isEnabled)
 		isFlickering = false
 	end)
@@ -245,11 +217,11 @@ function FlashlightController.init()
 			FlashlightController.toggle()
 		end
 	end)
-	local rig, root, spot, point, sfx = createFlashlightRig()
+	local rig, root, spot, spill, sfx = createFlashlightRig()
 	_lightModel = rig
 	lightRoot = root
 	primarySpot = spot
-	fillPoint = point
+	warmSpill = spill
 	toggleSound = sfx
 
 	-- ContextActionService binding (keyboard + gamepad + mobile sink).
@@ -282,13 +254,10 @@ function FlashlightController.init()
 	end)
 
 	-- Battery drain + camera-tracking render loop.
-	RunService.RenderStepped:Connect(function(dt: number)
-		if not camera then
-			camera = Workspace.CurrentCamera
-			return
-		end
-		if not lightRoot then
-			return
+	RunService:BindToRenderStep(RENDER_STEP, Enum.RenderPriority.Camera.Value + 1, function(dt: number)
+		local camera = Workspace.CurrentCamera
+		if camera and lightRoot then
+			lightRoot.CFrame = camera.CFrame
 		end
 
 		if isEnabled and not isFlickering then
@@ -297,10 +266,6 @@ function FlashlightController.init()
 				FlashlightController.toggle()
 			end
 		end
-
-		-- Shoulder-offset camera tracking.
-		local targetCF = camera.CFrame * CFrame.new(0.6, -0.5, -0.2)
-		lightRoot.CFrame = lightRoot.CFrame:Lerp(targetCF, math.clamp(dt * CONFIG.TWEEN_ROTATION_SPEED, 0, 1))
 	end)
 
 	print("[FlashlightController] Initialised. Input: F / ButtonY / touch button.")
@@ -309,12 +274,13 @@ end
 -- Cleanup (call when character dies / round ends).
 function FlashlightController.destroy()
 	ContextActionService:UnbindAction(ACTION_NAME)
+	RunService:UnbindFromRenderStep(RENDER_STEP)
 	if _lightModel then
 		_lightModel:Destroy()
 		_lightModel = nil
 		lightRoot = nil
 		primarySpot = nil
-		fillPoint = nil
+		warmSpill = nil
 		toggleSound = nil
 	end
 end

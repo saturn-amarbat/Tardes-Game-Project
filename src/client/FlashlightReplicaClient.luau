@@ -7,10 +7,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local REPLICA_SPOT_ANGLE = 48
-local REPLICA_SPOT_RANGE = 55
-local REPLICA_SPOT_BRIGHTNESS = 2.4
-local REPLICA_LIGHT_COLOR = Color3.fromRGB(245, 240, 220)
+local FlashlightOptics = require(script.Parent.FlashlightOptics)
 
 local function getOrMakeReplicaSpot(character: Model): SpotLight?
 	local torso = character:FindFirstChild("UpperTorso") or character:FindFirstChild("Torso")
@@ -23,17 +20,7 @@ local function getOrMakeReplicaSpot(character: Model): SpotLight?
 		return existing
 	end
 
-	local spot = Instance.new("SpotLight")
-	spot.Name = "ReplicaFlashlight"
-	spot.Angle = REPLICA_SPOT_ANGLE
-	spot.Range = REPLICA_SPOT_RANGE
-	spot.Brightness = REPLICA_SPOT_BRIGHTNESS
-	spot.Color = REPLICA_LIGHT_COLOR
-	spot.Shadows = false -- keep client perf sane for remote players
-	spot.Enabled = false
-	spot.Face = Enum.NormalId.Front
-	spot.Parent = torso
-	return spot
+	return FlashlightOptics.replica(torso)
 end
 
 local function onToggleStateReply(sender: Player, isOn: boolean)

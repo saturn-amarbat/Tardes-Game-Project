@@ -140,12 +140,16 @@ function PrologueManager.init()
 	local prologueFolder = ensureFolder(ReplicatedStorage, "PrologueRemotes")
 	local dialogueEvent = ensureRemote(prologueFolder, "ShowDialogue")
 	local skipEvent = ensureRemote(prologueFolder, "SkipPrologue")
+	local candidate = Workspace:FindFirstChild("DeerIntroRig")
+	local deer = if candidate and candidate:IsA("Model") then candidate else nil
+	local home = if deer then deer:GetPivot() else nil
+	prologueFolder:SetAttribute("OmenAvailable", deer ~= nil)
 
 	-- Skip vote tracking.
 	local skipVotes: { [Player]: boolean } = {}
 
 	skipEvent.OnServerEvent:Connect(function(player: Player)
-		if player:GetAttribute("DungeonEntered") or player:GetAttribute("SittingOut") then
+		if not deer or omenTriggered or player:GetAttribute("DungeonEntered") or player:GetAttribute("SittingOut") then
 			return
 		end
 		skipVotes[player] = true
@@ -157,6 +161,7 @@ function PrologueManager.init()
 		-- Majority (> half) triggers skip.
 		if votes > math.floor(total / 2) and not omenTriggered then
 			omenTriggered = true
+			prologueFolder:SetAttribute("OmenAvailable", false)
 			activateBunkerLight()
 			dialogueEvent:FireAllClients("")
 		end
@@ -168,11 +173,10 @@ function PrologueManager.init()
 
 	-- Proximity poll: check every 0.5 s whether a player or flashlight is near
 	-- the DeerIntroRig anchor. This avoids per-frame cost.
-	local deer = Workspace:FindFirstChild("DeerIntroRig") :: Model?
-	local home = if deer then deer:GetPivot() else nil
 	Workspace:GetAttributeChangedSignal("ExpeditionNumber"):Connect(function()
 		sequenceId += 1
 		omenTriggered = false
+		prologueFolder:SetAttribute("OmenAvailable", deer ~= nil)
 		table.clear(skipVotes)
 		if deer and home then
 			deer:PivotTo(home)
@@ -200,6 +204,7 @@ function PrologueManager.init()
 			local hrp = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
 			if hrp and (hrp.Position - deerPos).Magnitude < TRIGGER_RADIUS then
 				omenTriggered = true
+				prologueFolder:SetAttribute("OmenAvailable", false)
 				task.spawn(runDeerSequence, sequenceId, dialogueEvent)
 				break
 			end

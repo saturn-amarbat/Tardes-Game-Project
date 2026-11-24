@@ -59,8 +59,9 @@ To prevent data loss, conflicts, and sync desynchronization:
 
 ## Current Baseline & Team Split
 
-- **Current Git Baseline**: `main` at commit `bd85690` (*"Merge Milestone 2 HUD and forest integration"*).
-- **Studio Team Create Baseline**: Version 20.
+- **Start from `origin/main`.** It contains the playable co-op run, the Blackpine survey galleries, and the cottage reveal. Create short-lived feature branches from this shared baseline.
+- **Opening flow.** Find the brass kitchen key, unlock the hinged cellar hatch, and follow the pipe rail down to the concourse. At the lift, the first pull restores power for the whole squad and starts the load recorder. The next interaction boards each player individually.
+- **Team Create.** Use the shared Project Horror place for the authored room templates, NPC rigs, and lighting. Git tracks the opening model and the scripts that dress it at runtime.
 - **Team Responsibilities**:
   - **Technical Lead**: Owns `src/` (Luau codebase) via Rojo + Git, enforcing `--!strict`, modular services/controllers, and CI checks (`stylua`, `selene`).
   - **Creative Lead**: Owns 3D geometry, environment art, [src/server/ForestCabin/Opening.rbxmx](file:///c:/Users/sanch/Projects/horror-game/src/server/ForestCabin/Opening.rbxmx), `ReplicatedStorage/RoomTemplates`, `ReplicatedStorage/NPCModels`, `Lighting`, audio instances, and raw UI layout in Team Create.

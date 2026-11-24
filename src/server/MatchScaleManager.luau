@@ -43,7 +43,7 @@ function MatchScaleManager.init(buildRooms: () -> { Model })
 	local members: { [Player]: boolean } = {}
 	local rooms: { Model } = {}
 	local gate: { arm: () -> (), close: () -> (), destroy: () -> () }? = nil
-	local claims: RBXScriptConnection? = nil
+	local claims: { Disconnect: (any) -> () }? = nil
 	local round = 0
 	local keys, fuses, keyTotal, fuseTotal = 0, 0, 1, 1
 	local function setPhase(new: string)

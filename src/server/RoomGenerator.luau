@@ -42,6 +42,20 @@ local function getRoomAnchors(room: Model): (BasePart?, BasePart?)
 	return nil, nil
 end
 
+local function getRoomTurnSign(entrance: BasePart, exit: BasePart): number
+	-- Remember: template anchors have LookVector pointing opposite along straight rooms (Ent=+Z, Ex=-Z)
+	-- Flip exit LookVector to get the travel exit direction and cross with entrance LookVector.
+	local enterDir = entrance.CFrame.LookVector
+	local exitTravelDir = -exit.CFrame.LookVector
+	local crossY = enterDir:Cross(exitTravelDir).Y
+	if crossY > 0.4 then
+		return 1 -- Left turn
+	elseif crossY < -0.4 then
+		return -1 -- Right turn
+	end
+	return 0
+end
+
 local function buildSafeRoomTemplate(): Model
 	local model = Instance.new("Model")
 	model.Name = "ToadMakerSafeRoom"
@@ -124,6 +138,7 @@ function RoomGenerator.generate(numRooms: number): { Model }
 	local currentExitCF: CFrame = CFrame.new(0, 0, 0)
 	local spawnPad = Workspace:FindFirstChild("StartSpawn")
 	local safeSlot = if numRooms >= 4 then math.ceil(numRooms / 2) else 0
+	local lastTurnSign = 0
 
 	local random = Random.new()
 
@@ -150,6 +165,13 @@ function RoomGenerator.generate(numRooms: number): { Model }
 			local entrance, exit = getRoomAnchors(candidate)
 			if not entrance or not exit then
 				warn("Template " .. chosenTemplate.Name .. " missing Entrance/Exit – skipping.")
+				candidate:Destroy()
+				continue
+			end
+
+			-- Prevent two consecutive turns in the same direction (avoids self-colliding U-turns)
+			local turnSign = getRoomTurnSign(entrance, exit)
+			if turnSign ~= 0 and turnSign == lastTurnSign and #availableTemplates > 0 then
 				candidate:Destroy()
 				continue
 			end
@@ -205,6 +227,9 @@ function RoomGenerator.generate(numRooms: number): { Model }
 				candidate.Parent = dungeonFolder
 				table.insert(spawnedRooms, candidate)
 				currentExitCF = exit.CFrame
+				if turnSign ~= 0 then
+					lastTurnSign = turnSign
+				end
 				placed = true
 				break
 			else

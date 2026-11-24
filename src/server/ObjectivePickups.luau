@@ -1,19 +1,11 @@
 --!strict
 local Workspace = game:GetService("Workspace")
+local InteractionRouter = require(script.Parent.InteractionRouter)
 local ObjectiveProps = require(script.Parent.ObjectiveProps)
 local ObjectivePickups = {}
 
 function ObjectivePickups.inReach(player: Player, part: BasePart, radius: number): boolean
-	local character = player.Character
-	local root = character and character:FindFirstChild("HumanoidRootPart")
-	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-	return player:GetAttribute("DungeonEntered") == true
-		and player:GetAttribute("SittingOut") ~= true
-		and root ~= nil
-		and root:IsA("BasePart")
-		and humanoid ~= nil
-		and humanoid.Health > 0
-		and (root.Position - part.Position).Magnitude <= radius
+	return InteractionRouter.isValidActor(player, part, radius)
 end
 
 -- Room entrances have guaranteed walkable thresholds, even on L-shaped templates.
@@ -45,6 +37,7 @@ function ObjectivePickups.spawn(
 	credit: (string) -> ()
 )
 	local registered: { [BasePart]: { kind: string, prompt: ProximityPrompt, room: Model, prop: Folder } } = {}
+	local unregisters: { () -> () } = {}
 	local dungeon = Workspace:FindFirstChild("GeneratedDungeon")
 	local function claim(player: Player, candidate: unknown)
 		if typeof(candidate) ~= "Instance" or not candidate:IsA("BasePart") then
@@ -53,17 +46,18 @@ function ObjectivePickups.spawn(
 		local item = registered[candidate]
 		if
 			not item
+			or candidate:GetAttribute("Collected") == true
 			or not dungeon
 			or item.room.Parent ~= dungeon
 			or candidate.Parent ~= item.room
-			or item.prompt.Parent ~= candidate
 			or not item.prompt.Enabled
 			or not canCollect(player)
 			or not ObjectivePickups.inReach(player, candidate, item.prompt.MaxActivationDistance)
 		then
 			return
 		end
-		-- Both entry points share this non-yielding claim.
+		-- Lock immediately before mutating totals to prevent duplicate/simultaneous claims.
+		candidate:SetAttribute("Collected", true)
 		registered[candidate] = nil
 		candidate:SetAttribute("ClaimedBy", player.UserId)
 		item.prompt.Enabled = false
@@ -95,18 +89,41 @@ function ObjectivePickups.spawn(
 			slots[room] = slot
 		end
 		local part = place(room, kind, slot, socketForPickup)
+		part:SetAttribute("Collected", false)
 		local prop = ObjectiveProps.mount(part, kind == "Key")
+
+		local mount = Instance.new("Attachment")
+		mount.Name = "PromptMount"
+		mount.Parent = part
+
 		local prompt = Instance.new("ProximityPrompt")
 		prompt.ActionText = "Take"
 		prompt.ObjectText = if kind == "Key" then "Survey key" else "Ceramic fuse"
-		prompt.MaxActivationDistance = 6
-		prompt.Parent = part
+		prompt.MaxActivationDistance = 7
+		prompt.RequiresLineOfSight = true
+		prompt.Parent = mount
+
 		registered[part] = { kind = kind, prompt = prompt, room = room, prop = prop }
-		prompt.Triggered:Connect(function(player)
-			claim(player, part)
-		end)
+		table.insert(
+			unregisters,
+			InteractionRouter.register(prompt, {
+				targetPart = part,
+				onTriggered = function(player)
+					claim(player, part)
+				end,
+			})
+		)
 	end
-	return collect.OnServerEvent:Connect(claim)
+	-- Reject client-fabricated strings without a valid server pickup instance.
+	local remoteConn = collect.OnServerEvent:Connect(claim)
+	return {
+		Disconnect = function()
+			remoteConn:Disconnect()
+			for _, unreg in unregisters do
+				unreg()
+			end
+		end,
+	}
 end
 
 return ObjectivePickups

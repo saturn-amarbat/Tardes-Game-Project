@@ -1,7 +1,8 @@
 --!strict
 local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
-local ObjectivePickups = require(script.Parent.ObjectivePickups)
+local InteractionRouter = require(script.Parent.InteractionRouter)
 
 local ExitGate = {}
 
@@ -108,9 +109,10 @@ function ExitGate.install(
 		door = bulkhead
 		table.insert(owned, bulkhead)
 	end
-	local leaves: { [BasePart]: { collide: boolean, transparency: number } } = {}
+	local leaves: { [BasePart]: { collide: boolean, transparency: number, cframe: CFrame } } = {}
+	local unregisters: { () -> () } = {}
 	local function remember(part: BasePart)
-		leaves[part] = { collide = part.CanCollide, transparency = part.Transparency }
+		leaves[part] = { collide = part.CanCollide, transparency = part.Transparency, cframe = part.CFrame }
 	end
 	if door then
 		if door:IsA("BasePart") then
@@ -131,25 +133,21 @@ function ExitGate.install(
 	extract.Name = "EscapePrompt"
 	extract.ActionText = "Escape with squad"
 	extract.ObjectText = "Extraction"
-	extract.RequiresLineOfSight = false
+	extract.MaxActivationDistance = 8
+	extract.RequiresLineOfSight = true
 	extract.Enabled = false
-	extract.Parent = if door and door:IsA("BasePart")
-		then door
-		elseif door and door:IsA("Model") and door.PrimaryPart then door.PrimaryPart
-		else exit
-	local extractionPart = extract.Parent :: BasePart
+	extract.Parent = exit
 	table.insert(owned, extract)
 	table.insert(
-		connections,
-		extract.Triggered:Connect(function(player: Player)
-			if
-				open
-				and eligible(player)
-				and ObjectivePickups.inReach(player, extractionPart, extract.MaxActivationDistance)
-			then
-				escape()
-			end
-		end)
+		unregisters,
+		InteractionRouter.register(extract, {
+			targetPart = exit,
+			onTriggered = function(player: Player)
+				if open and eligible(player) then
+					escape()
+				end
+			end,
+		})
 	)
 
 	local function clear(index: number, player: Player)
@@ -174,7 +172,7 @@ function ExitGate.install(
 				or not part:IsA("BasePart")
 				or not p.Enabled
 				or not eligible(player)
-				or not ObjectivePickups.inReach(player, part, p.MaxActivationDistance)
+				or not InteractionRouter.isValidActor(player, part, p.MaxActivationDistance)
 			then
 				clear(i, player)
 			end
@@ -196,9 +194,13 @@ function ExitGate.install(
 		for _, p in prompts do
 			p.Enabled = false
 		end
-		for part in leaves do
+		for part, state in leaves do
 			part.CanCollide = false
-			part.Transparency = 0.85
+			TweenService:Create(
+				part,
+				TweenInfo.new(1.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+				{ CFrame = state.cframe * CFrame.new(0, 7.2, 0) }
+			):Play()
 		end
 		if beacon then
 			beacon.Color = Color3.fromRGB(82, 232, 128)
@@ -267,59 +269,53 @@ function ExitGate.install(
 			table.insert(owned, prompt)
 		end
 		prompt.Name = "Prompt"
-		prompt.ActionText = "Hold Lever"
+		prompt.ActionText = "Locked — Missing Keys/Fuses"
 		prompt.ObjectText = name
-		prompt.HoldDuration = 3
+		prompt.HoldDuration = 0
+		prompt.MaxActivationDistance = 7
 		prompt.RequiresLineOfSight = true
-		prompt.Enabled = false
+		prompt.Enabled = true
 		prompt.Parent = lever
 		prompts[index] = prompt
 		table.insert(
-			connections,
-			prompt.PromptButtonHoldBegan:Connect(function(player: Player)
-				if
-					not ready
-					or open
-					or holders[index]
-					or holders[3 - index] == player
-					or not eligible(player)
-					or not ObjectivePickups.inReach(player, lever, prompt.MaxActivationDistance)
-				then
-					return
-				end
-				holders[index] = player
-				update()
-			end)
-		)
-		-- HoldEnded also fires when the native progress ring fills. TriggerEnded
-		-- is the release after a completed hold; an early cancellation clears immediately.
-
-		table.insert(
-			connections,
-			prompt.Triggered:Connect(function(player: Player)
-				if holders[index] == player then
-					completed[index] = true
-					update()
-				end
-			end)
-		)
-		table.insert(
-			connections,
-			prompt.PromptButtonHoldEnded:Connect(function(player: Player)
-				-- Roblox sends HoldEnded immediately before Triggered on completion.
-				-- A cancelled hold never receives Triggered and cannot unlock.
-				task.delay(0.1, function()
-					if not completed[index] then
-						clear(index, player)
+			unregisters,
+			InteractionRouter.register(prompt, {
+				targetPart = lever,
+				onHoldBegan = function(player: Player)
+					if not ready or open or holders[index] or holders[3 - index] == player or not eligible(player) then
+						return
 					end
-				end)
-			end)
-		)
-		table.insert(
-			connections,
-			prompt.TriggerEnded:Connect(function(player: Player)
-				clear(index, player)
-			end)
+					holders[index] = player
+					update()
+				end,
+				onTriggered = function(player: Player)
+					if not ready then
+						local doorEvent = remotes:FindFirstChild("DoorUnlocked")
+						if doorEvent and doorEvent:IsA("RemoteEvent") then
+							doorEvent:FireClient(player, "Locked")
+						end
+						return
+					end
+					if holders[index] == player then
+						completed[index] = true
+						update()
+					end
+				end,
+				onHoldEnded = function(player: Player)
+					-- Roblox sends HoldEnded immediately before Triggered on completion.
+					task.delay(0.1, function()
+						if not completed[index] then
+							clear(index, player)
+						end
+					end)
+				end,
+				onTriggerEnded = function(player: Player)
+					clear(index, player)
+				end,
+				onPlayerLost = function(player: Player)
+					clear(index, player)
+				end,
+			})
 		)
 	end
 	table.insert(connections, RunService.Heartbeat:Connect(update))
@@ -327,6 +323,8 @@ function ExitGate.install(
 		arm = function()
 			ready = true
 			for _, p in prompts do
+				p.ActionText = "Hold Lever"
+				p.HoldDuration = 3
 				p.Enabled = true
 			end
 			remotes:SetAttribute("ObjectivesComplete", true)
@@ -341,12 +339,16 @@ function ExitGate.install(
 			table.clear(holders)
 		end,
 		destroy = function()
+			for _, unreg in unregisters do
+				unreg()
+			end
 			for _, conn in connections do
 				conn:Disconnect()
 			end
 			for part, state in leaves do
 				part.CanCollide = state.collide
 				part.Transparency = state.transparency
+				part.CFrame = state.cframe
 			end
 			for _, item in owned do
 				item:Destroy()

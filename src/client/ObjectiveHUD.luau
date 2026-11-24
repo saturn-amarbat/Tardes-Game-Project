@@ -323,6 +323,25 @@ local function init()
 		end)
 	end
 
+	local doorEv = matchRemotes:WaitForChild("DoorUnlocked", 10) :: RemoteEvent?
+	if doorEv then
+		doorEv.OnClientEvent:Connect(function(status: string)
+			if status == "Locked" then
+				flashLabel.TextColor3 = Color3.fromRGB(255, 118, 92)
+				flashLabel.Text = "Locked — Missing Keys/Fuses"
+				flashLabel.TextTransparency = 0
+				task.delay(2.5, function()
+					if flashLabel.Text == "Locked — Missing Keys/Fuses" then
+						flashLabel.TextColor3 = Color3.fromRGB(100, 255, 140)
+						refreshProgress()
+					end
+				end)
+			else
+				flashLabel.TextColor3 = Color3.fromRGB(100, 255, 140)
+			end
+		end)
+	end
+
 	print("[ObjectiveHUD] Ready.")
 end
 

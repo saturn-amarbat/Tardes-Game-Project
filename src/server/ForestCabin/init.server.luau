@@ -38,6 +38,13 @@ end
 
 local hardware = require(script.CottageHardware).install(cabin, key, hatch)
 local relay = require(script.SurveyRelay).install(vault, lift)
+local lamp = cabin:FindFirstChild("Pilothouse lamp")
+Workspace:SetAttribute("BlackpineStart", start.Position)
+local approach = if lamp and lamp:IsA("BasePart") then lamp.Position else hatch.Position
+Workspace:SetAttribute("BlackpineCottage", Vector3.new(approach.X, hatch.Position.Y, approach.Z))
+Workspace:SetAttribute("BlackpineOpeningStep", "FindKey")
+require(script.TrailMarkers).install(opening, start)
+
 local firstPull = "Restore lift power"
 local ride = liftPrompt.ActionText
 local relayCycle = 0
@@ -49,6 +56,7 @@ local originalKeyTransparency = key.Transparency
 local originalHatchTransparency = hatch.Transparency
 Workspace:GetAttributeChangedSignal("ExpeditionNumber"):Connect(function()
 	recovered = false
+	Workspace:SetAttribute("BlackpineOpeningStep", "FindKey")
 	relayCycle += 1
 	relay.reset()
 	hardware.reset()
@@ -66,6 +74,7 @@ keyPrompt.Triggered:Connect(function(player)
 		return
 	end
 	recovered = true
+	Workspace:SetAttribute("BlackpineOpeningStep", "UnlockHatch")
 	hardware.takeKey()
 	keyPrompt.Enabled = false
 	key.Transparency = 1
@@ -76,6 +85,7 @@ hatchPrompt.ObjectText = "Locked • check the kitchen"
 hatchPrompt.Triggered:Connect(function(player)
 	if recovered and hatchPrompt.Enabled and nearby(player, hatch) then
 		hatchPrompt.Enabled = false
+		Workspace:SetAttribute("BlackpineOpeningStep", "FindLift")
 		hatch.CanCollide = false
 		hatch.Transparency = 1
 		hardware.open()
@@ -98,6 +108,7 @@ liftPrompt.Triggered:Connect(function(player)
 	end
 	-- The first pull energizes the recorder for the whole party. Boarding stays individual.
 	if relay.power() then
+		Workspace:SetAttribute("BlackpineOpeningStep", "BoardLift")
 		local cycle = relayCycle
 		liftPrompt.Enabled = false
 		liftPrompt.ActionText = ride

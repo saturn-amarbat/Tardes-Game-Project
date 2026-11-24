@@ -1,4 +1,28 @@
 --!strict
+--[[
+  FlashlightController  –  Client-side Slender-Man layered flashlight system.
+
+  Input binding hierarchy (highest priority first):
+    1. ContextActionService action "ToggleFlashlight"
+       • KeyCode.F  (keyboard)
+       • KeyCode.ButtonY  (gamepad)
+       • Touch InputBinding via HUD button (GameHUD/FlashlightButton) if present,
+         else a runtime ScreenGui fallback button is created automatically.
+    2. HapticEffect (UIClick pulse) fires on mobile toggle and anomaly flicker start.
+
+  Co-op replication:
+    • toggle() fires ReplicatedStorage/FlashlightRemotes/ToggleState → server
+      broadcasts to all other clients → they show/hide the SpotLight on the
+      character's torso attachment (see FlashlightReplicator.luau server side).
+
+  Battery:
+    • Drains at DRAIN_RATE_PER_SEC while enabled, auto-off at 0%.
+    • triggerAnomalyFlicker(duration, intensity) pauses drain during flicker.
+    • getBattery() returns current 0–100 value for HUD display.
+]]
+
+local ContextActionService = game:GetService("ContextActionService")
+local HapticService = game:GetService("HapticService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -7,19 +31,22 @@ local Workspace = game:GetService("Workspace")
 
 local FlashlightController = {}
 
--- Configuration
+-- ── Configuration ──────────────────────────────────────────────────────────
 local CONFIG = {
 	MAX_BATTERY = 100,
-	DRAIN_RATE_PER_SEC = 0.5, -- Battery lasts ~200 seconds when on
+	DRAIN_RATE_PER_SEC = 0.5, -- ~200 s runtime
 	SPOT_BRIGHTNESS = 2.8,
 	SPOT_RANGE = 60,
 	SPOT_ANGLE = 48,
 	AMBIENT_BRIGHTNESS = 0.45,
 	AMBIENT_RANGE = 14,
-	LIGHT_COLOR = Color3.fromRGB(245, 240, 220), -- Slightly warm incandescent beam
+	LIGHT_COLOR = Color3.fromRGB(245, 240, 220),
 	TWEEN_ROTATION_SPEED = 18,
 }
 
+local ACTION_NAME = "ToggleFlashlight"
+
+-- ── State ───────────────────────────────────────────────────────────────────
 local player = Players.LocalPlayer
 local camera = Workspace.CurrentCamera
 
@@ -27,13 +54,28 @@ local isEnabled = false
 local battery = CONFIG.MAX_BATTERY
 local isFlickering = false
 
--- Physical / visual light rig
 local _lightModel: Model? = nil
 local lightRoot: Part? = nil
 local primarySpot: SpotLight? = nil
 local fillPoint: PointLight? = nil
 local toggleSound: Sound? = nil
 
+-- ── Helpers ─────────────────────────────────────────────────────────────────
+local function hapticPulse()
+	-- Vibrate left-hand motor briefly on supported gamepads / mobile.
+	local ok = pcall(function()
+		HapticService:SetMotor(Enum.UserInputType.Gamepad1, Enum.VibrationMotor.LeftHand, 0.3)
+	end)
+	if ok then
+		task.delay(0.08, function()
+			pcall(function()
+				HapticService:SetMotor(Enum.UserInputType.Gamepad1, Enum.VibrationMotor.LeftHand, 0)
+			end)
+		end)
+	end
+end
+
+-- ── Light Rig ───────────────────────────────────────────────────────────────
 local function createFlashlightRig(): (Model, Part, SpotLight, PointLight, Sound)
 	local rig = Instance.new("Model")
 	rig.Name = "ClientFlashlightRig"
@@ -48,7 +90,7 @@ local function createFlashlightRig(): (Model, Part, SpotLight, PointLight, Sound
 	root.Anchored = true
 	root.Parent = rig
 
-	-- Primary crisp SpotLight (Slender-man narrow directional cone with shadows)
+	-- Primary crisp cone (shadows on)
 	local spot = Instance.new("SpotLight")
 	spot.Name = "PrimaryCone"
 	spot.Angle = CONFIG.SPOT_ANGLE
@@ -60,7 +102,7 @@ local function createFlashlightRig(): (Model, Part, SpotLight, PointLight, Sound
 	spot.Face = Enum.NormalId.Front
 	spot.Parent = root
 
-	-- Secondary ambient PointLight (Soft ambient fill for mobile / low graphics compatibility)
+	-- Soft ambient fill (mobile/low-graphics friendly, no shadows)
 	local point = Instance.new("PointLight")
 	point.Name = "AmbientFill"
 	point.Range = CONFIG.AMBIENT_RANGE
@@ -70,7 +112,7 @@ local function createFlashlightRig(): (Model, Part, SpotLight, PointLight, Sound
 	point.Enabled = false
 	point.Parent = root
 
-	-- Toggle SFX
+	-- Toggle click SFX
 	local sfx = Instance.new("Sound")
 	sfx.Name = "ClickSound"
 	sfx.SoundId = "rbxasset://sounds/electronicpingshort.wav"
@@ -81,31 +123,63 @@ local function createFlashlightRig(): (Model, Part, SpotLight, PointLight, Sound
 	return rig, root, spot, point, sfx
 end
 
--- Teleport helper with StreamingEnabled safety
-function FlashlightController.safeTeleport(targetCF: CFrame)
-	local character = player.Character
-	if not character then
+-- ── Touch HUD Button (created if GameHUD/FlashlightButton not present) ──────
+local function ensureTouchButton()
+	-- Try to find the button created by the Creative Lead first.
+	local hud = player.PlayerGui:FindFirstChild("GameHUD")
+	if not hud and game:GetService("StarterGui"):FindFirstChild("GameHUD") then
+		hud = player.PlayerGui:WaitForChild("GameHUD", 5)
+	end
+	if hud and hud:FindFirstChild("FlashlightButton") and hud.FlashlightButton:IsA("GuiButton") then
+		local btn = hud:FindFirstChild("FlashlightButton") :: GuiButton
+		btn.Activated:Connect(function()
+			FlashlightController.toggle()
+		end)
 		return
 	end
 
-	local hrp = character:FindFirstChild("HumanoidRootPart") :: BasePart?
-	if not hrp then
+	if not UserInputService.TouchEnabled then
 		return
 	end
 
-	-- Pre-stream region before teleporting to prevent void-falling
-	task.spawn(function()
-		player:RequestStreamAroundAsync(targetCF.Position)
-		character:PivotTo(targetCF)
+	-- Runtime fallback ScreenGui with a simple torch button.
+	local gui = Instance.new("ScreenGui")
+	gui.Name = "FlashlightHUD_Fallback"
+	gui.ResetOnSpawn = false
+	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	gui.Parent = player.PlayerGui
+
+	local btn = Instance.new("TextButton")
+	btn.Name = "FlashlightButton"
+	btn.Size = UDim2.fromOffset(80, 80)
+	btn.Position = UDim2.new(1, -100, 1, -120)
+	btn.AnchorPoint = Vector2.new(1, 1)
+	btn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+	btn.BackgroundTransparency = 0.3
+	btn.Text = "🔦"
+	btn.TextSize = 32
+	btn.Font = Enum.Font.GothamBold
+	btn.TextColor3 = Color3.new(1, 1, 1)
+	btn.Parent = gui
+
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0.5, 0)
+	corner.Parent = btn
+
+	btn.Activated:Connect(function()
+		FlashlightController.toggle()
+		hapticPulse()
 	end)
 end
 
+-- ── Core API ─────────────────────────────────────────────────────────────────
 function FlashlightController.setLights(state: boolean)
-	if not primarySpot or not fillPoint then
-		return
+	if primarySpot then
+		primarySpot.Enabled = state
 	end
-	primarySpot.Enabled = state
-	fillPoint.Enabled = state
+	if fillPoint then
+		fillPoint.Enabled = state
+	end
 end
 
 function FlashlightController.toggle()
@@ -119,25 +193,24 @@ function FlashlightController.toggle()
 	if toggleSound then
 		toggleSound:Play()
 	end
-
 	FlashlightController.setLights(isEnabled)
 
-	-- Fire server replication event if available
+	-- Replicate to server for co-op teammate SpotLight visibility.
 	local remotes = ReplicatedStorage:FindFirstChild("FlashlightRemotes")
 	if remotes then
-		local updateRemote = remotes:FindFirstChild("ToggleState") :: RemoteEvent?
-		if updateRemote then
-			updateRemote:FireServer(isEnabled)
+		local ev = remotes:FindFirstChild("ToggleState") :: RemoteEvent?
+		if ev then
+			ev:FireServer(isEnabled)
 		end
 	end
 end
 
--- Hook for horror entities / anomalies to induce realistic flickering
 function FlashlightController.triggerAnomalyFlicker(duration: number, intensity: number)
 	if not isEnabled or isFlickering then
 		return
 	end
 	isFlickering = true
+	hapticPulse() -- tactile cue on anomaly start
 
 	task.spawn(function()
 		local elapsed = 0
@@ -148,12 +221,10 @@ function FlashlightController.triggerAnomalyFlicker(duration: number, intensity:
 			if primarySpot then
 				primarySpot.Brightness = flickerOn and (origBrightness * (0.3 + math.random() * 0.7)) or 0
 			end
-
 			local step = math.random(3, 8) / 100
 			task.wait(step)
 			elapsed += step
 		end
-
 		if primarySpot then
 			primarySpot.Brightness = origBrightness
 		end
@@ -166,6 +237,7 @@ function FlashlightController.getBattery(): number
 	return battery
 end
 
+-- ── Initialisation ──────────────────────────────────────────────────────────
 function FlashlightController.init()
 	local rig, root, spot, point, sfx = createFlashlightRig()
 	_lightModel = rig
@@ -174,40 +246,71 @@ function FlashlightController.init()
 	fillPoint = point
 	toggleSound = sfx
 
-	-- Keybind: 'F' or Gamepad ButtonY / ButtonL3 to toggle flashlight
-	UserInputService.InputBegan:Connect(function(input: InputObject, gameProcessed: boolean)
-		if gameProcessed then
-			return
-		end
-		if input.KeyCode == Enum.KeyCode.F or input.KeyCode == Enum.KeyCode.ButtonY then
-			FlashlightController.toggle()
+	-- ContextActionService binding (keyboard + gamepad + mobile sink).
+	ContextActionService:BindAction(
+		ACTION_NAME,
+		function(_name: string, state: Enum.UserInputState, _input: InputObject)
+			if state == Enum.UserInputState.Begin then
+				FlashlightController.toggle()
+			end
+			return Enum.ContextActionResult.Sink
+		end,
+		false,
+		Enum.KeyCode.F,
+		Enum.KeyCode.ButtonY
+	)
+
+	ensureTouchButton()
+
+	-- Wire server->client flicker request from NPCManager.
+	task.spawn(function()
+		local remotes = ReplicatedStorage:WaitForChild("FlashlightRemotes", 10)
+		if remotes then
+			local flickerEv = remotes:WaitForChild("FlickerRequest", 10) :: RemoteEvent?
+			if flickerEv then
+				flickerEv.OnClientEvent:Connect(function(dur: number, intensity: number)
+					FlashlightController.triggerAnomalyFlicker(dur, intensity)
+				end)
+			end
 		end
 	end)
 
-	-- Battery & Light Tracking Render Loop
+	-- Battery drain + camera-tracking render loop.
 	RunService.RenderStepped:Connect(function(dt: number)
-		if not camera or not lightRoot then
+		if not camera then
 			camera = Workspace.CurrentCamera
 			return
 		end
+		if not lightRoot then
+			return
+		end
 
-		-- Drain battery if turned on
 		if isEnabled and not isFlickering then
-			battery = math.clamp(battery - (CONFIG.DRAIN_RATE_PER_SEC * dt), 0, CONFIG.MAX_BATTERY)
+			battery = math.clamp(battery - CONFIG.DRAIN_RATE_PER_SEC * dt, 0, CONFIG.MAX_BATTERY)
 			if battery <= 0 then
 				FlashlightController.toggle()
 			end
 		end
 
-		-- Camera tracking: Offset slightly below and to the right of camera for realistic shoulder perspective
-		local camCF = camera.CFrame
-		local targetCF = camCF * CFrame.new(0.6, -0.5, -0.2)
-
-		-- Smoothly rotate towards camera look vector for tactile feel
+		-- Shoulder-offset camera tracking.
+		local targetCF = camera.CFrame * CFrame.new(0.6, -0.5, -0.2)
 		lightRoot.CFrame = lightRoot.CFrame:Lerp(targetCF, math.clamp(dt * CONFIG.TWEEN_ROTATION_SPEED, 0, 1))
 	end)
 
-	print("[FlashlightController] Initialized Slender-Man layered flashlight system.")
+	print("[FlashlightController] Initialised. Input: F / ButtonY / touch button.")
+end
+
+-- Cleanup (call when character dies / round ends).
+function FlashlightController.destroy()
+	ContextActionService:UnbindAction(ACTION_NAME)
+	if _lightModel then
+		_lightModel:Destroy()
+		_lightModel = nil
+		lightRoot = nil
+		primarySpot = nil
+		fillPoint = nil
+		toggleSound = nil
+	end
 end
 
 return FlashlightController

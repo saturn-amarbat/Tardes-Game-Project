@@ -1,16 +1,8 @@
 --!strict
---[[
-  ObjectiveHUD  –  CLIENT-SIDE
-
-  Listens to:
-    MatchRemotes/ObjectiveProgress  → updates key/fuse counters.
-    MatchRemotes/ClueCollected      → shows collected clue text.
-    MatchRemotes/DoorUnlocked       → shows "EXIT OPEN!" flash.
-]]
+-- Uses replicated expedition state and displays clue text when it arrives.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local TweenService = game:GetService("TweenService")
 
 local player = Players.LocalPlayer
 local playerGui = player.PlayerGui
@@ -21,76 +13,95 @@ gui.Name = "ObjectiveHUD"
 gui.ResetOnSpawn = false
 gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 gui.Enabled = player:GetAttribute("DungeonEntered") == true
-player:GetAttributeChangedSignal("DungeonEntered"):Connect(function()
-	gui.Enabled = player:GetAttribute("DungeonEntered") == true
-end)
+
 gui.Parent = playerGui
 
 -- Top-left objective counter.
 local counterFrame = Instance.new("Frame")
 counterFrame.Name = "CounterFrame"
-counterFrame.Size = UDim2.fromOffset(200, 60)
+counterFrame.Size = UDim2.fromOffset(232, 71)
 counterFrame.Position = UDim2.fromOffset(16, 16)
-counterFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
-counterFrame.BackgroundTransparency = 0.4
+counterFrame.BackgroundColor3 = Color3.fromRGB(26, 41, 37)
+counterFrame.BackgroundTransparency = 0.16
 counterFrame.Parent = gui
 
 local counterCorner = Instance.new("UICorner")
-counterCorner.CornerRadius = UDim.new(0, 8)
+counterCorner.CornerRadius = UDim.new(0, 4)
 counterCorner.Parent = counterFrame
 
 local counterLabel = Instance.new("TextLabel")
-counterLabel.Size = UDim2.fromScale(1, 1)
+counterLabel.Size = UDim2.new(1, -24, 0, 24)
+counterLabel.Position = UDim2.fromOffset(12, 8)
+counterLabel.TextXAlignment = Enum.TextXAlignment.Left
 counterLabel.BackgroundTransparency = 1
 counterLabel.TextColor3 = Color3.new(1, 1, 1)
 counterLabel.Font = Enum.Font.GothamMedium
 counterLabel.TextSize = 16
-counterLabel.Text = "🔑 0/0  🔧 0/0"
+counterLabel.Text = ""
 counterLabel.Parent = counterFrame
+
+local instruction = Instance.new("TextLabel")
+instruction.Size = UDim2.new(1, -24, 0, 30)
+instruction.Position = UDim2.fromOffset(12, 31)
+instruction.BackgroundTransparency = 1
+instruction.TextColor3 = Color3.fromRGB(225, 202, 153)
+instruction.Font = Enum.Font.Gotham
+instruction.TextSize = 13
+instruction.TextWrapped = true
+instruction.TextXAlignment = Enum.TextXAlignment.Left
+instruction.Parent = counterFrame
 
 -- Centre clue reader panel (hidden by default).
 local cluePanel = Instance.new("Frame")
 cluePanel.Name = "CluePanel"
-cluePanel.Size = UDim2.fromScale(0.5, 0.3)
-cluePanel.Position = UDim2.fromScale(0.25, 0.35)
-cluePanel.BackgroundColor3 = Color3.fromRGB(15, 12, 10)
-cluePanel.BackgroundTransparency = 0.1
+cluePanel.AnchorPoint = Vector2.new(0.5, 0.5)
+cluePanel.Size = UDim2.fromOffset(440, 220)
+cluePanel.Position = UDim2.fromScale(0.5, 0.5)
+cluePanel.BackgroundColor3 = Color3.fromRGB(22, 19, 15)
+cluePanel.BackgroundTransparency = 0.06
 cluePanel.Visible = false
 cluePanel.Parent = gui
 
 local cluePanelCorner = Instance.new("UICorner")
-cluePanelCorner.CornerRadius = UDim.new(0, 10)
+cluePanelCorner.CornerRadius = UDim.new(0, 8)
 cluePanelCorner.Parent = cluePanel
 
+local clueStroke = Instance.new("UIStroke")
+clueStroke.Color = Color3.fromRGB(132, 108, 72)
+clueStroke.Thickness = 1.5
+clueStroke.Transparency = 0.25
+clueStroke.Parent = cluePanel
+
 local clueTitle = Instance.new("TextLabel")
-clueTitle.Size = UDim2.new(1, -20, 0, 36)
-clueTitle.Position = UDim2.fromOffset(10, 10)
+clueTitle.Size = UDim2.new(1, -90, 0, 36)
+clueTitle.Position = UDim2.fromOffset(18, 14)
 clueTitle.BackgroundTransparency = 1
-clueTitle.TextColor3 = Color3.fromRGB(240, 200, 140)
-clueTitle.Font = Enum.Font.GothamBold
-clueTitle.TextSize = 18
+clueTitle.TextColor3 = Color3.fromRGB(242, 212, 154)
+clueTitle.Font = Enum.Font.Garamond
+clueTitle.TextSize = 24
 clueTitle.TextXAlignment = Enum.TextXAlignment.Left
 clueTitle.Text = ""
 clueTitle.Parent = cluePanel
 
 local clueBody = Instance.new("TextLabel")
-clueBody.Size = UDim2.new(1, -20, 1, -60)
-clueBody.Position = UDim2.fromOffset(10, 50)
+clueBody.Size = UDim2.new(1, -36, 1, -68)
+clueBody.Position = UDim2.fromOffset(18, 54)
 clueBody.BackgroundTransparency = 1
-clueBody.TextColor3 = Color3.new(1, 1, 1)
+clueBody.TextColor3 = Color3.fromRGB(232, 226, 214)
 clueBody.Font = Enum.Font.Gotham
 clueBody.TextSize = 15
 clueBody.TextWrapped = true
 clueBody.TextXAlignment = Enum.TextXAlignment.Left
+clueBody.TextYAlignment = Enum.TextYAlignment.Top
 clueBody.Text = ""
 clueBody.Parent = cluePanel
 
 -- Close button.
 local clueClose = Instance.new("TextButton")
-clueClose.Size = UDim2.fromOffset(60, 28)
-clueClose.Position = UDim2.new(1, -70, 0, 8)
-clueClose.BackgroundColor3 = Color3.fromRGB(80, 30, 30)
-clueClose.TextColor3 = Color3.new(1, 1, 1)
+clueClose.Size = UDim2.fromOffset(64, 28)
+clueClose.Position = UDim2.new(1, -78, 0, 14)
+clueClose.BackgroundColor3 = Color3.fromRGB(74, 34, 30)
+clueClose.TextColor3 = Color3.fromRGB(240, 234, 224)
 clueClose.Font = Enum.Font.GothamBold
 clueClose.TextSize = 13
 clueClose.Text = "Close"
@@ -117,15 +128,6 @@ flashLabel.Text = ""
 flashLabel.TextTransparency = 1
 flashLabel.Parent = gui
 
-local function flashText(text: string)
-	flashLabel.Text = text
-	flashLabel.TextTransparency = 0
-	TweenService:Create(flashLabel, TweenInfo.new(2.5, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
-		TextTransparency = 1,
-	}):Play()
-end
-
--- ── Wire remotes ──────────────────────────────────────────────────────────────
 local function init()
 	local matchRemotes = ReplicatedStorage:WaitForChild("MatchRemotes", 10)
 	if not matchRemotes then
@@ -133,13 +135,41 @@ local function init()
 		return
 	end
 
-	local progressEv = matchRemotes:WaitForChild("ObjectiveProgress", 10) :: RemoteEvent?
 	local clueEv = matchRemotes:WaitForChild("ClueCollected", 10) :: RemoteEvent?
-	local doorEv = matchRemotes:WaitForChild("DoorUnlocked", 10) :: RemoteEvent?
 
 	local function refreshProgress()
+		local phase = matchRemotes:GetAttribute("RunState")
+		local waiting = player:GetAttribute("SittingOut") == true
+		local underground = player:GetAttribute("DungeonEntered") == true
+		local message = ""
+		if phase == "Escaped" then
+			message = "Squad escaped! Next expedition soon."
+		elseif phase == "Wiped" then
+			message = "Squad lost. Next expedition soon."
+		elseif waiting then
+			message = "Waiting for the next expedition"
+		elseif underground and matchRemotes:GetAttribute("ExitOpen") then
+			message = "Exit open • extract at the bulkhead"
+		elseif underground and matchRemotes:GetAttribute("ObjectivesComplete") then
+			message = if matchRemotes:GetAttribute("Survivors") == 1
+				then "Hold one exit lever for 3 seconds"
+				else "Hold both exit levers together for 3 seconds"
+		end
+		gui.Enabled = underground or waiting or message ~= ""
+		counterFrame.Visible = underground and not waiting and phase == "Active"
+		instruction.Text = if matchRemotes:GetAttribute("ExitOpen")
+			then "Reach the extraction bulkhead"
+			elseif matchRemotes:GetAttribute("ObjectivesComplete") then "Operate the exit levers"
+			else "Search the galleries for supplies"
+		flashLabel.Text = message
+		flashLabel.TextSize = 21
+		flashLabel.TextWrapped = true
+		flashLabel.TextTransparency = 0
+		if not underground or waiting then
+			cluePanel.Visible = false
+		end
 		counterLabel.Text = string.format(
-			"🔑 %d/%d  🔧 %d/%d",
+			"Keys %d/%d    Fuses %d/%d",
 			matchRemotes:GetAttribute("Keys") or 0,
 			matchRemotes:GetAttribute("KeysTotal") or 1,
 			matchRemotes:GetAttribute("Fuses") or 0,
@@ -149,26 +179,17 @@ local function init()
 	matchRemotes.AttributeChanged:Connect(refreshProgress)
 	refreshProgress()
 
-	if progressEv then
-		progressEv.OnClientEvent:Connect(
-			function(data: { keys: number, keysTotal: number, fuses: number, fusesTotal: number })
-				counterLabel.Text =
-					string.format("🔑 %d/%d  🔧 %d/%d", data.keys, data.keysTotal, data.fuses, data.fusesTotal)
-			end
-		)
-	end
+	player:GetAttributeChangedSignal("DungeonEntered"):Connect(refreshProgress)
+	player:GetAttributeChangedSignal("SittingOut"):Connect(refreshProgress)
 
 	if clueEv then
 		clueEv.OnClientEvent:Connect(function(entry: { title: string, body: string })
+			if not gui.Enabled or player:GetAttribute("SittingOut") then
+				return
+			end
 			clueTitle.Text = entry.title
 			clueBody.Text = entry.body
 			cluePanel.Visible = true
-		end)
-	end
-
-	if doorEv then
-		doorEv.OnClientEvent:Connect(function(_doorName: string)
-			flashText("EXIT OPEN!")
 		end)
 	end
 

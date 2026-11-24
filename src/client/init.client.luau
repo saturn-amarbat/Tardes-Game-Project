@@ -3,6 +3,7 @@ local FlashlightController = require(script.FlashlightController)
 require(script.FlashlightReplicaClient).init()
 require(script.PrologueController).init()
 require(script.ObjectiveHUD).init()
+require(script.SpectatorController).init()
 
 FlashlightController.init()
 

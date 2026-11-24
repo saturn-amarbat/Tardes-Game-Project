@@ -59,12 +59,13 @@ local function ensureFlickerRemote(): RemoteEvent
 		remotes.Parent = ReplicatedStorage
 	end
 	local ev = remotes:FindFirstChild("FlickerRequest") :: RemoteEvent?
-	if not ev then
-		ev = Instance.new("RemoteEvent")
-		ev.Name = "FlickerRequest"
-		ev.Parent = remotes
+	if ev then
+		return ev
 	end
-	return ev :: RemoteEvent
+	local created = Instance.new("RemoteEvent")
+	created.Name = "FlickerRequest"
+	created.Parent = remotes
+	return created
 end
 
 -- ── 1. ToadPassiveNPC ────────────────────────────────────────────────────────
@@ -155,9 +156,15 @@ local function spawnRoomInstance(room: Model, npcFolder: Folder, flickerRemote: 
 				flickerRemote:FireClient(player, 1.5, 0.7)
 				-- Brief flash-and-hide of the NPC.
 				task.spawn(function()
-					npc.PrimaryPart.Transparency = 0
+					local body = npc.PrimaryPart
+					if not body then
+						return
+					end
+					body.Transparency = 0
 					task.wait(0.15)
-					npc.PrimaryPart.Transparency = 0.5
+					if npc.PrimaryPart then
+						npc.PrimaryPart.Transparency = 0.5
+					end
 				end)
 				break
 			end
@@ -211,6 +218,7 @@ local function spawnStalker(room: Model, npcFolder: Folder)
 	local sounds = Workspace:FindFirstChild("Sounds")
 	local telegraphSound = sounds and sounds:FindFirstChild("StalkerTelegraph") :: Sound?
 	local telegraphPlayed = false
+	local nextAttack = 0
 
 	local conn: RBXScriptConnection? = nil
 	conn = RunService.Heartbeat:Connect(function(dt: number)
@@ -221,26 +229,43 @@ local function spawnStalker(room: Model, npcFolder: Folder)
 			return
 		end
 
-		-- Find nearest player.
+		-- Find nearest player (players with flashlights OFF are harder to detect in the dark).
 		local stalkerPos = stalker:GetPivot().Position
 		local nearestDist = math.huge
+		local nearestEffective = math.huge
 		local nearestPlayer: Player? = nil
 		for _, player in ipairs(Players:GetPlayers()) do
 			local char = player.Character
 			local hrp = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
-			if hrp then
+			if hrp and player:GetAttribute("DungeonEntered") and not player:GetAttribute("SittingOut") then
 				local d = (hrp.Position - stalkerPos).Magnitude
-				if d < nearestDist then
+				local lightMult = if player:GetAttribute("FlashlightOn") == true then 1 else 1.75
+				local effective = d * lightMult
+				if effective < nearestEffective then
+					nearestEffective = effective
 					nearestDist = d
 					nearestPlayer = player
 				end
 			end
 		end
 
-		-- State transitions.
-		if nearestDist < CHASE_DETECT_RANGE then
+		-- Contact damage sends the Stalker back to patrol and gives survivors time to move.
+		if nearestPlayer and nearestDist < 3 and os.clock() >= nextAttack then
+			local character = nearestPlayer.Character
+			local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+			if humanoid and humanoid.Health > 0 then
+				nextAttack = os.clock() + 6
+				humanoid:TakeDamage(35)
+				stalker:PivotTo(spawnCF)
+				state = "Patrol"
+				telegraphPlayed = false
+				return
+			end
+		end
+		-- State transitions (effective distance rewards turning off flashlight to hide).
+		if nearestEffective < CHASE_DETECT_RANGE then
 			state = "Chase"
-		elseif nearestDist < STALK_DETECT_RANGE then
+		elseif nearestEffective < STALK_DETECT_RANGE then
 			if state ~= "Chase" then
 				state = "Stalk"
 			end

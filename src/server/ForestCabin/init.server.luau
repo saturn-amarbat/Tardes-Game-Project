@@ -16,6 +16,11 @@ local hatchPrompt = hatch:WaitForChild("Prompt") :: ProximityPrompt
 local liftPrompt = lift:WaitForChild("Prompt") :: ProximityPrompt
 
 local function nearby(player: Player, part: BasePart): Model?
+	local match = game:GetService("ReplicatedStorage"):FindFirstChild("MatchRemotes")
+	local phase = match and match:GetAttribute("RunState")
+	if player:GetAttribute("SittingOut") or (phase and phase ~= "Forest" and phase ~= "Active") then
+		return nil
+	end
 	local character = player.Character
 	local body = if character then character:FindFirstChild("HumanoidRootPart") else nil
 	local humanoid = if character then character:FindFirstChildOfClass("Humanoid") else nil
@@ -31,33 +36,60 @@ local function nearby(player: Player, part: BasePart): Model?
 	return nil
 end
 
+local hardware = require(script.CottageHardware).install(cabin, key, hatch)
+local relay = require(script.SurveyRelay).install(vault, lift)
+local lamp = cabin:FindFirstChild("Pilothouse lamp")
+Workspace:SetAttribute("BlackpineStart", start.Position)
+local approach = if lamp and lamp:IsA("BasePart") then lamp.Position else hatch.Position
+Workspace:SetAttribute("BlackpineCottage", Vector3.new(approach.X, hatch.Position.Y, approach.Z))
+Workspace:SetAttribute("BlackpineOpeningStep", "FindKey")
+require(script.TrailMarkers).install(opening, start)
+
+local firstPull = "Restore lift power"
+local ride = liftPrompt.ActionText
+local relayCycle = 0
+liftPrompt.ActionText = firstPull
+
 -- The key belongs to the expedition. Its finder can leave without stranding the party.
 local recovered = false
+local originalKeyTransparency = key.Transparency
+local originalHatchTransparency = hatch.Transparency
+Workspace:GetAttributeChangedSignal("ExpeditionNumber"):Connect(function()
+	recovered = false
+	Workspace:SetAttribute("BlackpineOpeningStep", "FindKey")
+	relayCycle += 1
+	relay.reset()
+	hardware.reset()
+	liftPrompt.ActionText = firstPull
+	liftPrompt.Enabled = true
+	key.Transparency = originalKeyTransparency
+	keyPrompt.Enabled = true
+	hatch.CanCollide = true
+	hatch.Transparency = originalHatchTransparency
+	hatchPrompt.Enabled = true
+	hatchPrompt.ObjectText = "Locked • check the kitchen"
+end)
 keyPrompt.Triggered:Connect(function(player)
 	if recovered or not nearby(player, key) then
 		return
 	end
 	recovered = true
+	Workspace:SetAttribute("BlackpineOpeningStep", "UnlockHatch")
+	hardware.takeKey()
 	keyPrompt.Enabled = false
 	key.Transparency = 1
 	hatchPrompt.ObjectText = "Cellar • key recovered"
 end)
 
--- The isolated forest preview omits the hallway package and retains its local hatch.
-local hallways = script.Parent:FindFirstChild("BunkerHallways")
-local fall = if hallways then require(hallways:WaitForChild("SquadFall")).attach(hatch, lift) else nil
-
 hatchPrompt.ObjectText = "Locked • check the kitchen"
 hatchPrompt.Triggered:Connect(function(player)
 	if recovered and hatchPrompt.Enabled and nearby(player, hatch) then
-		if fall then
-			hatchPrompt.ActionText = "Descend to landing"
-			fall()
-			return
-		end
 		hatchPrompt.Enabled = false
+		Workspace:SetAttribute("BlackpineOpeningStep", "FindLift")
 		hatch.CanCollide = false
 		hatch.Transparency = 1
+		hardware.open()
+		relay.open()
 	end
 end)
 
@@ -65,7 +97,26 @@ end)
 local busy: { [Player]: boolean } = {}
 liftPrompt.Triggered:Connect(function(player)
 	local character = nearby(player, lift)
-	if not character or busy[player] then
+	if
+		not liftPrompt.Enabled
+		or not character
+		or busy[player]
+		or hatchPrompt.Enabled
+		or player:GetAttribute("DungeonEntered")
+	then
+		return
+	end
+	-- The first pull energizes the recorder for the whole party. Boarding stays individual.
+	if relay.power() then
+		Workspace:SetAttribute("BlackpineOpeningStep", "BoardLift")
+		local cycle = relayCycle
+		liftPrompt.Enabled = false
+		liftPrompt.ActionText = ride
+		task.delay(1.5, function()
+			if cycle == relayCycle then
+				liftPrompt.Enabled = true
+			end
+		end)
 		return
 	end
 	local dungeon = Workspace:FindFirstChild("GeneratedDungeon")

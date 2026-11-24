@@ -44,6 +44,7 @@ function FlashlightReplicator.init()
 	end
 
 	(toggleState :: RemoteEvent).OnServerEvent:Connect(function(sender: Player, isOn: boolean)
+		sender:SetAttribute("FlashlightOn", isOn == true)
 		-- Broadcast to every player except the sender.
 		for _, other in ipairs(Players:GetPlayers()) do
 			if other ~= sender then

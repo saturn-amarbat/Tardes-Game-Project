@@ -17,7 +17,7 @@ function ObjectivePickups.inReach(player: Player, part: BasePart, radius: number
 end
 
 -- Room entrances have guaranteed walkable thresholds, even on L-shaped templates.
-local function place(room: Model, kind: string, slot: number): BasePart
+local function place(room: Model, kind: string, slot: number, station: BasePart?): BasePart
 	local entrance = room:FindFirstChild("Entrance") :: BasePart
 	local column = (slot - 1) % 3
 	local row = math.floor((slot - 1) / 3)
@@ -29,7 +29,9 @@ local function place(room: Model, kind: string, slot: number): BasePart
 	part.CanQuery = false
 	part.Transparency = 1
 	part.Size = Vector3.new(0.85, 0.66, 0.28)
-	part.CFrame = entrance.CFrame * CFrame.new((column - 1) * 0.96, -entrance.Size.Y / 2 + 2 + row * 0.8, 0)
+	part.CFrame = if station
+		then station.CFrame
+		else entrance.CFrame * CFrame.new((column - 1) * 0.96, -entrance.Size.Y / 2 + 2 + row * 0.8, 0)
 	part.Parent = room
 	return part
 end
@@ -70,15 +72,27 @@ function ObjectivePickups.spawn(
 	end
 	local slots: { [Model]: number } = {}
 	local total = keyTotal + fuseTotal
+	local first = rooms[1]
+	local bay = first and first:FindFirstChild("MaintenanceBay")
+	local socket = bay and bay:FindFirstChild("Fuse socket")
+	local station = if socket and socket:IsA("BasePart") then socket else nil
 	for i = 1, total do
 		if #rooms == 0 then
 			break
 		end
-		local room = rooms[math.clamp(math.ceil(i * #rooms / (total + 1)), 1, #rooms)]
+
 		local kind = if i % 2 == 0 and i <= fuseTotal * 2 then "Fuse" else "Key"
+		local socketForPickup = if kind == "Fuse" then station else nil
+		local room = if socketForPickup
+			then first
+			else rooms[math.clamp(math.ceil(i * #rooms / (total + 1)), 1, #rooms)]
 		local slot = (slots[room] or 0) + 1
-		slots[room] = slot
-		local part = place(room, kind, slot)
+		if socketForPickup then
+			station = nil
+		else
+			slots[room] = slot
+		end
+		local part = place(room, kind, slot, socketForPickup)
 		local prop = ObjectiveProps.mount(part, kind == "Key")
 		local prompt = Instance.new("ProximityPrompt")
 		prompt.ActionText = "Take"

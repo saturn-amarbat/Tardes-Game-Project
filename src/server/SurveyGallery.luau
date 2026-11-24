@@ -120,6 +120,9 @@ local function dress(room: Model, index: number, count: number)
 	end
 	local mount = room:FindFirstChild("SurveyMount", true)
 	local authored = if mount and mount:IsA("Attachment") then mount.WorldCFrame else nil
+	if not authored and room:FindFirstChild("MaintenanceBay") then
+		return
+	end
 	local bay = findBay(room, entrance)
 	if not bay and not authored then
 		return

@@ -36,12 +36,24 @@ local function nearby(player: Player, part: BasePart): Model?
 	return nil
 end
 
+local hardware = require(script.CottageHardware).install(cabin, key, hatch)
+local relay = require(script.SurveyRelay).install(vault, lift)
+local firstPull = "Restore lift power"
+local ride = liftPrompt.ActionText
+local relayCycle = 0
+liftPrompt.ActionText = firstPull
+
 -- The key belongs to the expedition. Its finder can leave without stranding the party.
 local recovered = false
 local originalKeyTransparency = key.Transparency
 local originalHatchTransparency = hatch.Transparency
 Workspace:GetAttributeChangedSignal("ExpeditionNumber"):Connect(function()
 	recovered = false
+	relayCycle += 1
+	relay.reset()
+	hardware.reset()
+	liftPrompt.ActionText = firstPull
+	liftPrompt.Enabled = true
 	key.Transparency = originalKeyTransparency
 	keyPrompt.Enabled = true
 	hatch.CanCollide = true
@@ -54,6 +66,7 @@ keyPrompt.Triggered:Connect(function(player)
 		return
 	end
 	recovered = true
+	hardware.takeKey()
 	keyPrompt.Enabled = false
 	key.Transparency = 1
 	hatchPrompt.ObjectText = "Cellar • key recovered"
@@ -65,6 +78,8 @@ hatchPrompt.Triggered:Connect(function(player)
 		hatchPrompt.Enabled = false
 		hatch.CanCollide = false
 		hatch.Transparency = 1
+		hardware.open()
+		relay.open()
 	end
 end)
 
@@ -72,7 +87,25 @@ end)
 local busy: { [Player]: boolean } = {}
 liftPrompt.Triggered:Connect(function(player)
 	local character = nearby(player, lift)
-	if not character or busy[player] or hatchPrompt.Enabled or player:GetAttribute("DungeonEntered") then
+	if
+		not liftPrompt.Enabled
+		or not character
+		or busy[player]
+		or hatchPrompt.Enabled
+		or player:GetAttribute("DungeonEntered")
+	then
+		return
+	end
+	-- The first pull energizes the recorder for the whole party. Boarding stays individual.
+	if relay.power() then
+		local cycle = relayCycle
+		liftPrompt.Enabled = false
+		liftPrompt.ActionText = ride
+		task.delay(1.5, function()
+			if cycle == relayCycle then
+				liftPrompt.Enabled = true
+			end
+		end)
 		return
 	end
 	local dungeon = Workspace:FindFirstChild("GeneratedDungeon")

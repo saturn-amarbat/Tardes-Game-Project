@@ -89,7 +89,7 @@ function FlashlightOptics.localBeam(emitter: BasePart, cfg: BeamConfig): (SpotLi
 	dustBeam.LightEmission = 1
 	dustBeam.Color = ColorSequence.new(cfg.CoreColor)
 	dustBeam.Transparency = NumberSequence.new({
-		NumberSequenceKeypoint.new(0, 0.93),
+		NumberSequenceKeypoint.new(0, 0.965),
 		NumberSequenceKeypoint.new(1, 1),
 	})
 	dustBeam.Enabled = false

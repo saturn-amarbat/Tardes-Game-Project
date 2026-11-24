@@ -94,14 +94,41 @@ local function spawnToad(room: Model, npcFolder: Folder)
 	toad:PivotTo(randomRoomPosition(room, toad))
 	toad.Parent = npcFolder
 
-	-- Croak loop hook.
+	-- 3D spatialized croak loop on the toad itself (only audible when a dungeon player is nearby).
 	task.spawn(function()
 		local sounds = Workspace:FindFirstChild("Sounds")
-		local croak = sounds and sounds:FindFirstChild("ToadCroak") :: Sound?
+		local templateCroak = sounds and sounds:FindFirstChild("ToadCroak") :: Sound?
+		local localCroak: Sound? = nil
+		if templateCroak and toad.PrimaryPart then
+			local cloned = templateCroak:Clone()
+			cloned.Volume = 0.32
+			cloned.RollOffMode = Enum.RollOffMode.InverseTapered
+			cloned.RollOffMinDistance = 4
+			cloned.RollOffMaxDistance = 24
+			cloned.Parent = toad.PrimaryPart
+			localCroak = cloned
+		end
 		while toad.Parent do
-			task.wait(TOAD_CROAK_INTERVAL + math.random() * 4)
-			if croak then
-				croak:Play()
+			task.wait(TOAD_CROAK_INTERVAL + math.random() * 5)
+			if localCroak and toad.PrimaryPart then
+				local toadPos = toad.PrimaryPart.Position
+				local playerNear = false
+				for _, p in Players:GetPlayers() do
+					local hrp = p.Character and p.Character:FindFirstChild("HumanoidRootPart")
+					if
+						p:GetAttribute("DungeonEntered") == true
+						and hrp
+						and hrp:IsA("BasePart")
+						and (hrp.Position - toadPos).Magnitude <= 28
+					then
+						playerNear = true
+						break
+					end
+				end
+				if playerNear then
+					localCroak.PlaybackSpeed = 0.95 + math.random() * 0.15
+					localCroak:Play()
+				end
 			end
 		end
 	end)
@@ -426,11 +453,14 @@ function NPCManager.init(rooms: { Model })
 		return
 	end
 
-	-- Spawn 3-5 passive toads spread across first third of dungeon (plus SafeRoom toads).
-	local toadCount = math.random(3, 5)
-	for _ = 1, toadCount do
-		local room = rooms[math.random(1, math.max(1, math.floor(numRooms / 3)))]
-		spawnToad(room, npcFolder :: Folder)
+	-- Spawn 2-3 passive toads spread across distinct early rooms (skip SafeRoom).
+	local toadCount = math.random(2, 3)
+	local earlyEnd = math.max(1, math.floor(numRooms / 3))
+	for i = 1, toadCount do
+		local room = rooms[((i - 1) % earlyEnd) + 1]
+		if room:GetAttribute("SafeRoom") ~= true then
+			spawnToad(room, npcFolder :: Folder)
+		end
 	end
 
 	-- Spawn RoomInstanceNPC in middle rooms, skipping any SafeRoom.

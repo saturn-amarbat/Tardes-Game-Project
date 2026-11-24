@@ -51,9 +51,10 @@ local CONFIG = {
 	SpillColor = Color3.fromRGB(235, 240, 255),
 	FillBrightness = 0.25,
 	FillRange = 10,
-	BeamLength = 14,
-	BeamWidth0 = 0.35,
-	BeamWidth1 = 5.5,
+	BeamLength = 12,
+	BeamWidth0 = 0.16,
+	BeamWidth1 = 3.2,
+	FirstPersonThreshold = 2.4,
 	MAX_BATTERY = 100,
 	DRAIN_RATE_PER_SEC = 0.5, -- ~200 s runtime
 	LOW_BATTERY_THRESHOLD = 15,
@@ -200,7 +201,7 @@ local function ensureTouchButton()
 end
 
 -- ── Core API ─────────────────────────────────────────────────────────────────
-function FlashlightController.setLights(state: boolean)
+function FlashlightController.setLights(state: boolean, showBeam: boolean?)
 	if coreLight then
 		coreLight.Enabled = state
 	end
@@ -211,7 +212,7 @@ function FlashlightController.setLights(state: boolean)
 		fillLight.Enabled = state
 	end
 	if dustBeam then
-		dustBeam.Enabled = state
+		dustBeam.Enabled = state and (showBeam == true)
 	end
 end
 
@@ -387,9 +388,11 @@ function FlashlightController.init()
 		swayTime += dt
 
 		local camera = Workspace.CurrentCamera
+		local inFirstPerson = true
 		if camera and emitterPart then
 			local character = player.Character
 			local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+			local head = character and character:FindFirstChild("Head")
 			local isMoving = humanoid ~= nil
 				and humanoid.MoveDirection.Magnitude > 0.1
 				and humanoid.FloorMaterial ~= Enum.Material.Air
@@ -403,21 +406,36 @@ function FlashlightController.init()
 			local walkX = math.cos(swayTime * CONFIG.WalkBobSpeed) * CONFIG.WalkBobAmount * walkBlend
 			local walkY = math.abs(math.sin(swayTime * CONFIG.WalkBobSpeed)) * -CONFIG.WalkBobAmount * walkBlend
 
-			local swayOffset = CFrame.new(idleX + walkX, idleY + walkY, -0.5)
-			local targetCFrame = camera.CFrame * swayOffset
+			local originCFrame = camera.CFrame
+			local rayOrigin = originCFrame.Position
+			local forwardOffset = -0.5
 
-			-- Prevent emitter from clipping into walls in Future lighting
+			if head and head:IsA("BasePart") then
+				local camDist = (camera.CFrame.Position - head.Position).Magnitude
+				if camDist >= CONFIG.FirstPersonThreshold then
+					-- In 3rd-person, originate beam ahead of the player's head so hair/torso never cast starburst shadows
+					inFirstPerson = false
+					local aimPos = head.Position + camera.CFrame.LookVector * 1.45 - Vector3.new(0, 0.1, 0)
+					originCFrame = CFrame.new(aimPos) * camera.CFrame.Rotation
+					rayOrigin = head.Position
+					forwardOffset = 0
+				end
+			end
+
+			local swayOffset = CFrame.new(idleX + walkX, idleY + walkY, forwardOffset)
+			local targetCFrame = originCFrame * swayOffset
+
+			-- Prevent emitter from clipping into walls in Realistic/Future lighting
 			local exclude: { Instance } = { emitterPart }
 			if character then
 				table.insert(exclude, character)
 			end
 			clipParams.FilterDescendantsInstances = exclude
-			local camPos = camera.CFrame.Position
-			local delta = targetCFrame.Position - camPos
+			local delta = targetCFrame.Position - rayOrigin
 			if delta.Magnitude > 0.01 then
-				local hit = Workspace:Raycast(camPos, delta, clipParams)
+				local hit = Workspace:Raycast(rayOrigin, delta, clipParams)
 				if hit then
-					local safePos = hit.Position - delta.Unit * 0.12
+					local safePos = hit.Position - delta.Unit * 0.14
 					targetCFrame = CFrame.new(safePos) * targetCFrame.Rotation
 				end
 			end
@@ -430,6 +448,10 @@ function FlashlightController.init()
 			end
 
 			emitterPart.CFrame = currentCFrame
+		end
+
+		if dustBeam then
+			dustBeam.Enabled = isOn and inFirstPerson
 		end
 
 		if isOn then

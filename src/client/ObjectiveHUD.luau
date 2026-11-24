@@ -4,6 +4,7 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
 
 local FlashlightController = require(script.Parent.FlashlightController)
 
@@ -156,6 +157,50 @@ batteryText.TextStrokeTransparency = 0.5
 batteryText.Text = "Battery 100%"
 batteryText.Parent = batteryFrame
 
+-- Slim health bar directly below BatteryFrame.
+local healthFrame = Instance.new("Frame")
+healthFrame.Name = "HealthFrame"
+healthFrame.Size = UDim2.fromOffset(290, 14)
+healthFrame.Position = UDim2.fromOffset(16, 115)
+healthFrame.BackgroundColor3 = Color3.fromRGB(20, 26, 24)
+healthFrame.BackgroundTransparency = 0.2
+healthFrame.Parent = gui
+
+local healthCorner = Instance.new("UICorner")
+healthCorner.CornerRadius = UDim.new(0, 4)
+healthCorner.Parent = healthFrame
+
+local healthFill = Instance.new("Frame")
+healthFill.Name = "Fill"
+healthFill.Size = UDim2.fromScale(1, 1)
+healthFill.BackgroundColor3 = Color3.fromRGB(96, 186, 114)
+healthFill.BorderSizePixel = 0
+healthFill.Parent = healthFrame
+
+local healthFillCorner = Instance.new("UICorner")
+healthFillCorner.CornerRadius = UDim.new(0, 4)
+healthFillCorner.Parent = healthFill
+
+local healthText = Instance.new("TextLabel")
+healthText.Size = UDim2.fromScale(1, 1)
+healthText.BackgroundTransparency = 1
+healthText.Font = Enum.Font.GothamMedium
+healthText.TextSize = 10
+healthText.TextColor3 = Color3.fromRGB(240, 238, 232)
+healthText.TextStrokeTransparency = 0.5
+healthText.Text = "Health 100%"
+healthText.Parent = healthFrame
+
+-- Red damage flash overlay when taking Stalker damage.
+local damageFlash = Instance.new("Frame")
+damageFlash.Name = "DamageFlash"
+damageFlash.Size = UDim2.fromScale(1, 1)
+damageFlash.BackgroundColor3 = Color3.fromRGB(150, 14, 14)
+damageFlash.BackgroundTransparency = 1
+damageFlash.BorderSizePixel = 0
+damageFlash.ZIndex = 10
+damageFlash.Parent = gui
+
 -- Top-centre banner for door/exit events (never overlaps centre CluePanel).
 local flashLabel = Instance.new("TextLabel")
 flashLabel.Name = "FlashLabel"
@@ -201,6 +246,7 @@ local function init()
 		gui.Enabled = underground or waiting or message ~= ""
 		counterFrame.Visible = underground and not waiting and phase == "Active"
 		batteryFrame.Visible = counterFrame.Visible
+		healthFrame.Visible = counterFrame.Visible
 		instruction.Text = if matchRemotes:GetAttribute("ExitOpen")
 			then "Reach the extraction bulkhead"
 			elseif matchRemotes:GetAttribute("ObjectivesComplete") then "Operate the exit levers"
@@ -230,7 +276,27 @@ local function init()
 	player:GetAttributeChangedSignal("RunScrap"):Connect(refreshProgress)
 
 	local lastPct = -1
+	local lastHp = 100
 	RunService.Heartbeat:Connect(function()
+		local char = player.Character
+		local hum = char and char:FindFirstChildOfClass("Humanoid")
+		if hum then
+			local hpPct = math.clamp(math.floor((hum.Health / math.max(1, hum.MaxHealth)) * 100 + 0.5), 0, 100)
+			if hpPct < lastHp then
+				damageFlash.BackgroundTransparency = 0.55
+				TweenService:Create(damageFlash, TweenInfo.new(0.45), { BackgroundTransparency = 1 }):Play()
+			end
+			if hpPct ~= lastHp then
+				lastHp = hpPct
+				healthFill.Size = UDim2.fromScale(hpPct / 100, 1)
+				healthFill.BackgroundColor3 = if hpPct <= 35
+					then Color3.fromRGB(204, 62, 54)
+					elseif hpPct <= 65 then Color3.fromRGB(224, 168, 76)
+					else Color3.fromRGB(96, 186, 114)
+				healthText.Text = string.format("Health %d%%", hpPct)
+			end
+		end
+
 		if not batteryFrame.Visible then
 			return
 		end

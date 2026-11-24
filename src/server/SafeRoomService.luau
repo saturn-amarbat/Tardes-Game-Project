@@ -131,16 +131,24 @@ function SafeRoomService.install(rooms: { Model })
 	booth.Parent = safeRoom
 
 	local pivot = safeRoom:GetPivot()
+	local rayParams = RaycastParams.new()
+	rayParams.FilterType = Enum.RaycastFilterType.Include
+	rayParams.FilterDescendantsInstances = { safeRoom }
+	rayParams.RespectCanCollide = true
+	local floorHit = Workspace:Raycast(pivot.Position + Vector3.yAxis * 4, -Vector3.yAxis * 12, rayParams)
+	local floorY = if floorHit then floorHit.Position.Y else pivot.Position.Y + 0.5
+	local origin = CFrame.new(pivot.X, floorY, pivot.Z) * pivot.Rotation
+
 	local wood = Color3.fromRGB(76, 52, 34)
 	local iron = Color3.fromRGB(54, 58, 60)
 	local brass = Color3.fromRGB(168, 138, 72)
 
-	-- Counter + canopy + warm sanctuary lantern
+	-- Counter + canopy + warm sanctuary lantern grounded on floorY
 	makePart(
 		booth,
 		"Counter",
 		Vector3.new(2.4, 3.2, 10.5),
-		pivot * CFrame.new(-7.6, -1.9, 0),
+		origin * CFrame.new(-7.6, 1.6, 0),
 		wood,
 		Enum.Material.Wood,
 		true
@@ -148,8 +156,8 @@ function SafeRoomService.install(rooms: { Model })
 	makePart(
 		booth,
 		"Canopy",
-		Vector3.new(3.2, 0.3, 11.2),
-		pivot * CFrame.new(-7.4, 2.8, 0),
+		Vector3.new(3.4, 0.3, 11.4),
+		origin * CFrame.new(-7.4, 6.4, 0),
 		iron,
 		Enum.Material.CorrodedMetal,
 		false
@@ -158,16 +166,16 @@ function SafeRoomService.install(rooms: { Model })
 		booth,
 		"SanctuaryLantern",
 		Vector3.new(0.6, 0.8, 0.6),
-		pivot * CFrame.new(-7.2, 0.2, -3.8),
+		origin * CFrame.new(-7.2, 3.6, -4.0),
 		Color3.fromRGB(255, 214, 132),
 		Enum.Material.Neon,
 		false
 	)
 	local light = Instance.new("PointLight")
 	light.Color = Color3.fromRGB(255, 206, 128)
-	light.Range = 28
-	light.Brightness = 1.8
-	light.Shadows = true
+	light.Range = 32
+	light.Brightness = 2.0
+	light.Shadows = false
 	light.Parent = lantern
 
 	-- Toad-Maker shopkeeper silhouette behind the counter
@@ -175,7 +183,7 @@ function SafeRoomService.install(rooms: { Model })
 		booth,
 		"KeeperBody",
 		Vector3.new(1.8, 3.2, 1.4),
-		pivot * CFrame.new(-9.2, -1.4, 0),
+		origin * CFrame.new(-9.2, 1.6, 0),
 		Color3.fromRGB(48, 62, 46),
 		Enum.Material.Fabric,
 		true
@@ -184,7 +192,7 @@ function SafeRoomService.install(rooms: { Model })
 		booth,
 		"KeeperHead",
 		Vector3.new(1.1, 1.1, 1.1),
-		pivot * CFrame.new(-9.2, 0.75, 0),
+		origin * CFrame.new(-9.2, 3.75, 0),
 		Color3.fromRGB(68, 88, 56),
 		Enum.Material.Pebble,
 		false
@@ -194,19 +202,19 @@ function SafeRoomService.install(rooms: { Model })
 			booth,
 			"KeeperEye",
 			Vector3.new(0.16, 0.16, 0.16),
-			pivot * CFrame.new(-8.65, 0.9, ez),
+			origin * CFrame.new(-8.65, 3.9, ez),
 			Color3.fromRGB(235, 198, 86),
 			Enum.Material.Neon,
 			false
 		)
 	end
 
-	-- Signplate
+	-- Signplate hung cleanly above the counter canopy facing center walkway
 	local sign = makePart(
 		booth,
 		"SafeSign",
-		Vector3.new(0.15, 1.1, 6.2),
-		pivot * CFrame.new(-6.0, 2.6, 0),
+		Vector3.new(0.15, 1.1, 6.8),
+		origin * CFrame.new(-5.8, 6.4, 0),
 		Color3.fromRGB(42, 54, 44),
 		Enum.Material.Metal,
 		false
@@ -246,7 +254,7 @@ function SafeRoomService.install(rooms: { Model })
 			booth,
 			name,
 			Vector3.new(0.9, 0.7, 0.9),
-			pivot * CFrame.new(-7.0, 0.05, zOffset),
+			origin * CFrame.new(-7.1, 3.55, zOffset),
 			color,
 			Enum.Material.Metal,
 			false

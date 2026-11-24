@@ -22,6 +22,92 @@ function ExitGate.install(
 	local open = false
 	local ready = false
 	local door = Workspace:FindFirstChild("ExitDoor")
+	local beacon: Part? = nil
+	local beaconLight: PointLight? = nil
+	if not door then
+		-- Build an authored-looking extraction bulkhead directly at lastRoom.Exit
+		local bulkhead = Instance.new("Model")
+		bulkhead.Name = "ExitDoor"
+		local frameCF = exit.CFrame
+
+		local function bPart(
+			name: string,
+			size: Vector3,
+			cf: CFrame,
+			color: Color3,
+			mat: Enum.Material,
+			collide: boolean
+		): Part
+			local p = Instance.new("Part")
+			p.Name = name
+			p.Size = size
+			p.CFrame = cf
+			p.Color = color
+			p.Material = mat
+			p.Anchored = true
+			p.CanCollide = collide
+			p.CanQuery = collide
+			p.CanTouch = false
+			p.TopSurface = Enum.SurfaceType.Smooth
+			p.BottomSurface = Enum.SurfaceType.Smooth
+			p.Parent = bulkhead
+			return p
+		end
+
+		local blastLeaf = bPart(
+			"BlastLeaf",
+			Vector3.new(6.8, 7.6, 0.6),
+			frameCF * CFrame.new(0, 0.3, 0),
+			Color3.fromRGB(48, 54, 52),
+			Enum.Material.DiamondPlate,
+			true
+		)
+		bPart(
+			"FrameLeft",
+			Vector3.new(0.9, 8.4, 1.2),
+			frameCF * CFrame.new(-3.8, 0.5, 0),
+			Color3.fromRGB(64, 52, 44),
+			Enum.Material.CorrodedMetal,
+			true
+		)
+		bPart(
+			"FrameRight",
+			Vector3.new(0.9, 8.4, 1.2),
+			frameCF * CFrame.new(3.8, 0.5, 0),
+			Color3.fromRGB(64, 52, 44),
+			Enum.Material.CorrodedMetal,
+			true
+		)
+		bPart(
+			"FrameTop",
+			Vector3.new(8.5, 0.9, 1.2),
+			frameCF * CFrame.new(0, 4.4, 0),
+			Color3.fromRGB(64, 52, 44),
+			Enum.Material.CorrodedMetal,
+			true
+		)
+		local bLightPart = bPart(
+			"StatusBeacon",
+			Vector3.new(0.8, 0.4, 0.4),
+			frameCF * CFrame.new(0, 3.8, 0.7),
+			Color3.fromRGB(205, 58, 48),
+			Enum.Material.Neon,
+			false
+		)
+		local bl = Instance.new("PointLight")
+		bl.Color = Color3.fromRGB(205, 58, 48)
+		bl.Range = 14
+		bl.Brightness = 1.1
+		bl.Shadows = false
+		bl.Parent = bLightPart
+		beacon = bLightPart
+		beaconLight = bl
+
+		bulkhead.PrimaryPart = blastLeaf
+		bulkhead.Parent = Workspace
+		door = bulkhead
+		table.insert(owned, bulkhead)
+	end
 	local leaves: { [BasePart]: { collide: boolean, transparency: number } } = {}
 	local function remember(part: BasePart)
 		leaves[part] = { collide = part.CanCollide, transparency = part.Transparency }
@@ -30,9 +116,14 @@ function ExitGate.install(
 		if door:IsA("BasePart") then
 			remember(door)
 		end
-		for _, part in door:GetDescendants() do
-			if part:IsA("BasePart") then
-				remember(part)
+		local leaf = door:FindFirstChild("BlastLeaf")
+		if leaf and leaf:IsA("BasePart") then
+			remember(leaf)
+		elseif not leaf then
+			for _, part in door:GetDescendants() do
+				if part:IsA("BasePart") then
+					remember(part)
+				end
 			end
 		end
 	end
@@ -107,7 +198,13 @@ function ExitGate.install(
 		end
 		for part in leaves do
 			part.CanCollide = false
-			part.Transparency = 1
+			part.Transparency = 0.85
+		end
+		if beacon then
+			beacon.Color = Color3.fromRGB(82, 232, 128)
+		end
+		if beaconLight then
+			beaconLight.Color = Color3.fromRGB(82, 232, 128)
 		end
 		remotes:SetAttribute("ExitOpen", true)
 		local doorEvent = remotes:FindFirstChild("DoorUnlocked") :: RemoteEvent
@@ -117,18 +214,41 @@ function ExitGate.install(
 	for index, name in { "ExitLever_A", "ExitLever_B" } do
 		local part = Workspace:FindFirstChild(name)
 		if not part then
+			local sideOffset = if index == 1 then -4.2 else 4.2
+			local baseCF = exit.CFrame * CFrame.new(sideOffset, -exit.Size.Y / 2 + 2.0, 2.2)
+
 			local hook = Instance.new("Part")
 			hook.Name = name
 			hook.Anchored = true
-			hook.CanCollide = false
-			hook.Size = Vector3.new(0.8, 2, 0.8)
-			hook.Material = Enum.Material.Neon
-			hook.Color = Color3.fromRGB(180, 130, 54)
-			hook.CFrame = exit.CFrame * CFrame.new(if index == 1 then -2 else 2, -exit.Size.Y / 2 + 2, 0)
+			hook.CanCollide = true
+			hook.Size = Vector3.new(1.0, 4.0, 1.0)
+			hook.Material = Enum.Material.CorrodedMetal
+			hook.Color = Color3.fromRGB(58, 62, 60)
+			hook.CFrame = baseCF
 			hook.Parent = Workspace
+
+			local handle = Instance.new("Part")
+			handle.Name = "LeverHandle"
+			handle.Anchored = true
+			handle.CanCollide = false
+			handle.Size = Vector3.new(0.22, 1.4, 0.22)
+			handle.Material = Enum.Material.Metal
+			handle.Color = Color3.fromRGB(190, 140, 56)
+			handle.CFrame = baseCF * CFrame.new(0, 0.8, 0.55) * CFrame.Angles(0.45, 0, 0)
+			handle.Parent = hook
+
+			local lamp = Instance.new("Part")
+			lamp.Name = "LeverLamp"
+			lamp.Anchored = true
+			lamp.CanCollide = false
+			lamp.Size = Vector3.new(0.4, 0.25, 0.2)
+			lamp.Material = Enum.Material.Neon
+			lamp.Color = Color3.fromRGB(228, 162, 64)
+			lamp.CFrame = baseCF * CFrame.new(0, 1.65, 0.48)
+			lamp.Parent = hook
+
 			part = hook
 			table.insert(owned, hook)
-			warn("[ExitGate] Runtime placeholder for Workspace." .. name)
 		end
 		if not part:IsA("BasePart") then
 			warn("[ExitGate] Expected BasePart: " .. name)

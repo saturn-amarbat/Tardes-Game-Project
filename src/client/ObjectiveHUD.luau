@@ -16,6 +16,7 @@ local TweenService = game:GetService("TweenService")
 local FlashlightController = require(script.Parent.FlashlightController)
 local HUDIcons = require(script.Parent.HUDIcons)
 local SprintController = require(script.Parent.SprintController)
+local Typography = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Typography"))
 
 local player = Players.LocalPlayer
 local playerGui = player.PlayerGui
@@ -256,12 +257,13 @@ local clueIcon = HUDIcons.journal(cluePanel, PALETTE.Brass, 18)
 clueIcon.Position = UDim2.fromOffset(18, 17)
 
 local clueTitle = Instance.new("TextLabel")
-clueTitle.Size = UDim2.new(1, -96, 0, 32)
-clueTitle.Position = UDim2.fromOffset(44, 11)
+clueTitle.Size = UDim2.new(1, -96, 0, 34)
+clueTitle.Position = UDim2.fromOffset(44, 10)
 clueTitle.BackgroundTransparency = 1
-clueTitle.TextColor3 = PALETTE.Brass
-clueTitle.Font = Enum.Font.Garamond
-clueTitle.TextSize = 24
+clueTitle.TextColor3 = Typography.Colors.ParchmentGold
+Typography.applyStroke(clueTitle, 0.3)
+clueTitle.Font = Typography.Fonts.Calligraphy
+clueTitle.TextSize = 26
 clueTitle.TextXAlignment = Enum.TextXAlignment.Left
 clueTitle.Text = ""
 clueTitle.Parent = cluePanel
@@ -278,9 +280,10 @@ local clueBody = Instance.new("TextLabel")
 clueBody.Size = UDim2.new(1, -36, 1, -72)
 clueBody.Position = UDim2.fromOffset(18, 58)
 clueBody.BackgroundTransparency = 1
-clueBody.TextColor3 = PALETTE.Ivory
-clueBody.Font = Enum.Font.Gotham
-clueBody.TextSize = 15
+clueBody.TextColor3 = Typography.Colors.Bone
+Typography.applyStroke(clueBody, 0.5)
+clueBody.Font = Typography.Fonts.Narrative
+clueBody.TextSize = 18
 clueBody.TextWrapped = true
 clueBody.TextXAlignment = Enum.TextXAlignment.Left
 clueBody.TextYAlignment = Enum.TextYAlignment.Top
@@ -318,16 +321,49 @@ damageFlash.Parent = gui
 local flashLabel = Instance.new("TextLabel")
 flashLabel.Name = "FlashLabel"
 flashLabel.AnchorPoint = Vector2.new(0.5, 0)
-flashLabel.Size = UDim2.new(0.55, 0, 0, 44)
+flashLabel.Size = UDim2.new(0.6, 0, 0, 44)
 flashLabel.Position = UDim2.new(0.5, 0, 0, 68)
 flashLabel.BackgroundTransparency = 1
-flashLabel.TextColor3 = Color3.fromRGB(118, 224, 152)
-flashLabel.Font = Enum.Font.GothamMedium
+flashLabel.TextColor3 = Typography.Colors.MintClear
+flashLabel.Font = Typography.Fonts.UI
 flashLabel.TextSize = 19
-flashLabel.TextStrokeTransparency = 0.35
+Typography.applyStroke(flashLabel, 0.3)
 flashLabel.Text = ""
 flashLabel.TextTransparency = 1
 flashLabel.Parent = gui
+
+local function showBunkerArrivalTitle()
+	local old = gui:FindFirstChild("ZoneTitle")
+	if old then
+		old:Destroy()
+	end
+	local title = Instance.new("TextLabel")
+	title.Name = "ZoneTitle"
+	title.AnchorPoint = Vector2.new(0.5, 0)
+	title.Position = UDim2.fromScale(0.5, 0.14)
+	title.Size = UDim2.new(0.8, 0, 0, 50)
+	title.BackgroundTransparency = 1
+	title.Text = "THE LOWER GALLERIES"
+	title.Font = Typography.Fonts.Calligraphy
+	title.TextSize = 36
+	title.TextColor3 = Typography.Colors.ParchmentGold
+	Typography.applyStroke(title, 0.25)
+	title.TextTransparency = 1
+	title.Parent = gui
+
+	TweenService:Create(title, TweenInfo.new(0.75), { TextTransparency = 0 }):Play()
+	task.delay(3.5, function()
+		if not title.Parent then
+			return
+		end
+		local fade =
+			TweenService:Create(title, TweenInfo.new(1.0), { TextTransparency = 1, TextStrokeTransparency = 1 })
+		fade:Play()
+		fade.Completed:Once(function()
+			title:Destroy()
+		end)
+	end)
+end
 
 local function init()
 	local matchRemotes = ReplicatedStorage:WaitForChild("MatchRemotes", 10)
@@ -365,6 +401,17 @@ local function init()
 			then "Reach the extraction bulkhead"
 			elseif matchRemotes:GetAttribute("ObjectivesComplete") then "Operate the exit levers"
 			else "Search the galleries for supplies"
+		if phase == "Escaped" or phase == "Wiped" then
+			flashLabel.Font = Typography.Fonts.Calligraphy
+			flashLabel.TextSize = 26
+			flashLabel.TextColor3 = if phase == "Escaped"
+				then Typography.Colors.ParchmentGold
+				else Typography.Colors.WallBlood
+		else
+			flashLabel.Font = Typography.Fonts.UI
+			flashLabel.TextSize = 18
+			flashLabel.TextColor3 = Typography.Colors.MintClear
+		end
 		flashLabel.Text = message
 		flashLabel.TextTransparency = 0
 		if not underground or waiting then
@@ -385,7 +432,15 @@ local function init()
 	matchRemotes.AttributeChanged:Connect(refreshProgress)
 	refreshProgress()
 
-	player:GetAttributeChangedSignal("DungeonEntered"):Connect(refreshProgress)
+	local wasUnderground = player:GetAttribute("DungeonEntered") == true
+	player:GetAttributeChangedSignal("DungeonEntered"):Connect(function()
+		local nowUnderground = player:GetAttribute("DungeonEntered") == true
+		if nowUnderground and not wasUnderground and player:GetAttribute("SittingOut") ~= true then
+			showBunkerArrivalTitle()
+		end
+		wasUnderground = nowUnderground
+		refreshProgress()
+	end)
 	player:GetAttributeChangedSignal("SittingOut"):Connect(refreshProgress)
 	player:GetAttributeChangedSignal("RunScrap"):Connect(refreshProgress)
 
@@ -437,10 +492,17 @@ local function init()
 	end)
 
 	if clueEv then
-		clueEv.OnClientEvent:Connect(function(entry: { title: string, body: string })
+		clueEv.OnClientEvent:Connect(function(entry: { title: string, body: string, isWallScribble: boolean? })
 			if not gui.Enabled or player:GetAttribute("SittingOut") then
 				return
 			end
+			local scribble = entry.isWallScribble == true
+			clueTitle.Font = if scribble then Typography.Fonts.Scribble else Typography.Fonts.Calligraphy
+			clueTitle.TextSize = if scribble then 24 else 26
+			clueTitle.TextColor3 = if scribble then Typography.Colors.WallBlood else Typography.Colors.ParchmentGold
+			clueBody.Font = if scribble then Typography.Fonts.Calligraphy else Typography.Fonts.Narrative
+			clueBody.TextSize = if scribble then 19 else 18
+			clueStroke.Color = if scribble then Color3.fromRGB(140, 58, 52) else Color3.fromRGB(132, 108, 72)
 			clueTitle.Text = entry.title
 			clueBody.Text = entry.body
 			cluePanel.Visible = true

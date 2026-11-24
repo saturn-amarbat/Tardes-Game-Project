@@ -14,6 +14,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
 
 local HUDIcons = require(script.Parent.HUDIcons)
+local Typography = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Typography"))
 local FieldJournal = {}
 
 local player = Players.LocalPlayer
@@ -125,14 +126,15 @@ function FieldJournal.init()
 	pStroke.Parent = panel
 
 	local header = Instance.new("TextLabel")
-	header.Size = UDim2.new(1, -100, 0, 36)
+	header.Size = UDim2.new(1, -100, 0, 38)
 	header.Position = UDim2.fromOffset(18, 10)
 	header.BackgroundTransparency = 1
-	header.Font = Enum.Font.Garamond
-	header.TextSize = 25
+	header.Font = Typography.Fonts.Calligraphy
+	header.TextSize = 28
 	header.TextXAlignment = Enum.TextXAlignment.Left
-	header.TextColor3 = Color3.fromRGB(242, 214, 158)
-	header.Text = "EXPEDITION FIELD JOURNAL"
+	header.TextColor3 = Typography.Colors.ParchmentGold
+	Typography.applyStroke(header, 0.35)
+	header.Text = "Expedition Field Journal"
 	header.Parent = panel
 
 	local closeBtn = Instance.new("TextButton")
@@ -228,28 +230,35 @@ function FieldJournal.init()
 			cc.CornerRadius = UDim.new(0, 6)
 			cc.Parent = card
 
+			local scribble = unlocked and entry.isWallScribble
 			local t = Instance.new("TextLabel")
 			t.Position = UDim2.fromOffset(10, 6)
-			t.Size = UDim2.new(1, -20, 0, 20)
+			t.Size = UDim2.new(1, -20, 0, 22)
 			t.BackgroundTransparency = 1
-			t.Font = Enum.Font.GothamBold
-			t.TextSize = 13
+			t.Font = if scribble
+				then Typography.Fonts.Scribble
+				elseif unlocked then Typography.Fonts.Calligraphy
+				else Typography.Fonts.UI
+			t.TextSize = if scribble then 16 elseif unlocked then 17 else 13
 			t.TextXAlignment = Enum.TextXAlignment.Left
-			t.TextColor3 = if unlocked then Color3.fromRGB(240, 208, 146) else Color3.fromRGB(115, 112, 104)
+			t.TextColor3 = if scribble
+				then Typography.Colors.WallBlood
+				elseif unlocked then Typography.Colors.ParchmentGold
+				else Color3.fromRGB(115, 112, 104)
 			t.Text = if unlocked then entry.title else "Undiscovered Clue"
 			t.Parent = card
 
 			if unlocked then
 				local b = Instance.new("TextLabel")
-				b.Position = UDim2.fromOffset(10, 27)
-				b.Size = UDim2.new(1, -20, 1, -32)
+				b.Position = UDim2.fromOffset(10, 29)
+				b.Size = UDim2.new(1, -20, 1, -34)
 				b.BackgroundTransparency = 1
-				b.Font = Enum.Font.Gotham
-				b.TextSize = 12
+				b.Font = if scribble then Typography.Fonts.Calligraphy else Typography.Fonts.Narrative
+				b.TextSize = if scribble then 15 else 14
 				b.TextWrapped = true
 				b.TextXAlignment = Enum.TextXAlignment.Left
 				b.TextYAlignment = Enum.TextYAlignment.Top
-				b.TextColor3 = Color3.fromRGB(224, 218, 206)
+				b.TextColor3 = Typography.Colors.Bone
 				b.Text = entry.body
 				b.Parent = card
 			end

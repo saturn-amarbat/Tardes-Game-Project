@@ -6,6 +6,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
 
+local Typography = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Typography"))
+
 local player = Players.LocalPlayer
 local playerGui = player.PlayerGui
 
@@ -21,18 +23,17 @@ local function buildDialogueUI(): (ScreenGui, TextLabel, TextButton)
 	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	gui.Parent = playerGui
 
-	-- Bottom-centre guidance label.
+	-- Bottom-centre guidance / omen subtitle (high-contrast bone ivory with dark stroke).
 	local label = Instance.new("TextLabel")
 	label.Name = "DialogueLabel"
 	label.AnchorPoint = Vector2.new(0.5, 1)
 	label.Size = UDim2.new(0.72, 0, 0, 56)
 	label.Position = UDim2.new(0.5, 0, 1, -42)
 	label.BackgroundTransparency = 1
-	label.TextColor3 = Color3.fromRGB(241, 225, 193)
-	label.TextStrokeTransparency = 0.5
-	label.TextStrokeColor3 = Color3.new(0, 0, 0)
-	label.Font = Enum.Font.GothamMedium
-	label.TextSize = 22
+	label.TextColor3 = Typography.Colors.Bone
+	Typography.applyStroke(label, 0.3)
+	label.Font = Typography.Fonts.Narrative
+	label.TextSize = 24
 	label.TextWrapped = true
 	label.Text = ""
 	label.Parent = gui
@@ -64,21 +65,28 @@ local function buildDialogueUI(): (ScreenGui, TextLabel, TextButton)
 end
 
 local function showLocation(gui: ScreenGui)
+	local existing = gui:FindFirstChild("Location")
+	if existing then
+		existing:Destroy()
+	end
 	local title = Instance.new("TextLabel")
 	title.Name = "Location"
 	title.AnchorPoint = Vector2.new(0.5, 0)
 	title.Position = UDim2.fromScale(0.5, 0.085)
-	title.Size = UDim2.new(0.85, 0, 0, 42)
+	title.Size = UDim2.new(0.85, 0, 0, 52)
 	title.BackgroundTransparency = 1
 	title.Text = "BLACKPINE WOODS"
-	title.TextColor3 = Color3.fromRGB(239, 221, 181)
-	title.TextStrokeTransparency = 0.45
+	title.TextColor3 = Typography.Colors.ParchmentGold
+	Typography.applyStroke(title, 0.25)
 	title.TextTransparency = 1
-	title.Font = Enum.Font.Garamond
-	title.TextSize = 32
+	title.Font = Typography.Fonts.Calligraphy
+	title.TextSize = 38
 	title.Parent = gui
 	TweenService:Create(title, TweenInfo.new(0.8), { TextTransparency = 0 }):Play()
 	task.delay(4, function()
+		if not title.Parent then
+			return
+		end
 		local fade =
 			TweenService:Create(title, TweenInfo.new(1.1), { TextTransparency = 1, TextStrokeTransparency = 1 })
 		fade:Play()
@@ -111,6 +119,17 @@ local function init()
 
 	local function refresh()
 		gui.Enabled = player:GetAttribute("DungeonEntered") ~= true and player:GetAttribute("SittingOut") ~= true
+		if not gui.Enabled then
+			local loc = gui:FindFirstChild("Location")
+			if loc then
+				loc:Destroy()
+			end
+			if fade then
+				fade:Cancel()
+			end
+			lastText = ""
+			label.Text = ""
+		end
 		skipBtn.Visible = prologueFolder:GetAttribute("OmenAvailable") == true
 		skipBtn.Active = not voted
 		skipBtn.Text = if voted then "Voted ✓" else "Skip omen"

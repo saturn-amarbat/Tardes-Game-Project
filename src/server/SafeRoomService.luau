@@ -221,14 +221,19 @@ function SafeRoomService.install(rooms: { Model })
 	)
 	local gui = Instance.new("SurfaceGui")
 	gui.Face = Enum.NormalId.Right
+	gui.CanvasSize = Vector2.new(520, 90)
+	gui.MaxDistance = 48
+	gui.LightInfluence = 0.6
 	gui.Parent = sign
 	local txt = Instance.new("TextLabel")
 	txt.Size = UDim2.fromScale(1, 1)
 	txt.BackgroundTransparency = 1
-	txt.Text = "TOAD-MAKER SANCTUARY"
+	txt.Text = "Toad-Maker Sanctuary"
 	txt.TextColor3 = Color3.fromRGB(244, 218, 152)
-	txt.Font = Enum.Font.Garamond
-	txt.TextScaled = true
+	txt.TextStrokeColor3 = Color3.fromRGB(8, 10, 10)
+	txt.TextStrokeTransparency = 0.25
+	txt.Font = Enum.Font.Fondamento
+	txt.TextSize = 44
 	txt.Parent = gui
 
 	local function spend(player: Player, cost: number): boolean

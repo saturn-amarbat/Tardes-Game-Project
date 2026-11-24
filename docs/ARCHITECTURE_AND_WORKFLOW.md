@@ -64,7 +64,8 @@ c:/Users/sanch/Projects/horror-game/
     └── shared/                         # ReplicatedStorage/Shared
         ├── .gitkeep
         ├── ClueData.luau               # Central lore & wall-scribble registry (7 entries)
-        └── ShopCatalog.luau            # Flashlight tint presets & Developer Product stubs
+        ├── ShopCatalog.luau            # Flashlight tint presets & Developer Product stubs
+        └── Typography.luau             # Calligraphic display vs utilitarian UI typography tokens
 ```
 
 ---

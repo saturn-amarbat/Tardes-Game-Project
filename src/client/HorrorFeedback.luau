@@ -11,9 +11,12 @@
 
 local Lighting = game:GetService("Lighting")
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
+
+local Typography = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Typography"))
 
 local HorrorFeedback = {}
 
@@ -81,10 +84,11 @@ function HorrorFeedback.init()
 	safeBadge.Position = UDim2.new(0.5, 0, 0, 16)
 	safeBadge.BackgroundColor3 = Color3.fromRGB(24, 42, 32)
 	safeBadge.BackgroundTransparency = 1
-	safeBadge.Text = "TOAD-MAKER SANCTUARY • SAFE"
-	safeBadge.Font = Enum.Font.Garamond
-	safeBadge.TextSize = 17
-	safeBadge.TextColor3 = Color3.fromRGB(236, 214, 148)
+	safeBadge.Text = "Toad-Maker Sanctuary"
+	safeBadge.Font = Typography.Fonts.Calligraphy
+	safeBadge.TextSize = 21
+	safeBadge.TextColor3 = Typography.Colors.ParchmentGold
+	Typography.applyStroke(safeBadge, 0.35)
 	safeBadge.TextTransparency = 1
 	safeBadge.Parent = gui
 

@@ -77,7 +77,7 @@ local function sign(folder: Folder, frame: CFrame, width: number, words: string)
 	caption.BackgroundTransparency = 1
 	caption.Size = UDim2.fromScale(1, 1)
 	caption.Font = Enum.Font.Code
-	caption.TextScaled = true
+	caption.TextSize = 32
 	caption.TextColor3 = Color3.fromRGB(236, 221, 181)
 	caption.Text = words
 	caption.Parent = gui

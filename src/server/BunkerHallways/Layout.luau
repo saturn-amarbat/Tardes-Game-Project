@@ -44,17 +44,24 @@ local function assemble(world: Folder, origin: CFrame, seed: number): Layout
 		if prev and prev:GetAttribute("Kind") == "DoorFrame" then
 			query.FilterDescendantsInstances = { prev }
 		end
-		local cf, size = piece:GetBoundingBox()
+		local cf = piece:GetPivot() * CFrame.new(0, (Config.Height - 0.5) / 2, 0)
+		local size = Vector3.new(piece:GetAttribute("Width"), Config.Height + 1.5, piece:GetAttribute("Depth"))
 		if #Workspace:GetPartBoundsInBox(cf, size - Vector3.one * 0.16, query) > 0 then
 			piece:Destroy()
 			return nil
 		end
 		local id = #nodes + 1
 		piece:SetAttribute("NodeId", id)
-		local node = { model = piece, position = piece:GetPivot().Position, neighbors = {} :: { number } }
+		-- Room patrol endpoints stay inside their doorway, clear of center props.
+		local position = if kind == "Room"
+			then entry.Position - entry.CFrame.LookVector * 4
+			else piece:GetPivot().Position
+		piece:SetAttribute("NavPosition", position)
+		local node = { model = piece, position = position, neighbors = {} :: { number } }
 		table.insert(nodes, node)
 		if prev then
 			local parentId = prev:GetAttribute("NodeId") :: number
+			piece:SetAttribute("ConnectedTo", parentId)
 			table.insert(nodes[parentId].neighbors, id)
 			table.insert(node.neighbors, parentId)
 		end
@@ -126,10 +133,13 @@ local function assemble(world: Folder, origin: CFrame, seed: number): Layout
 	end
 	extend("Cap", assert(socket), 1, "End bulkhead")
 	Registry.configure(markers, spine)
-	return { root = world, nodes = nodes, rooms = rooms, landing = anchor(rooms[1], "Floor"), exit = anchor(
-		rooms[10],
-		"Floor"
-	) }
+	return {
+		root = world,
+		nodes = nodes,
+		rooms = rooms,
+		landing = anchor(rooms[1], "Floor"),
+		exit = anchor(rooms[10], "Floor"),
+	}
 end
 
 function Layout.get(): Layout
@@ -143,6 +153,23 @@ function Layout.get(): Layout
 		local ok, result = pcall(assemble, world, Config.Origin * CFrame.new(attempt * 512, 0, 0), Config.Seed)
 		if ok then
 			current = result
+			for _, piece in world:GetChildren() do
+				if piece:GetAttribute("Flickering") then
+					local lamp = piece:FindFirstChild("Lamp") :: BasePart
+					local light = lamp:FindFirstChildOfClass("PointLight") :: PointLight
+					task.spawn(function()
+						while world.Parent do
+							task.wait(3.8)
+							if not lamp.Parent then
+								return
+							end
+							light.Brightness = 0.5
+							task.wait(0.18)
+							light.Brightness = 1.6
+						end
+					end)
+				end
+			end
 			world:SetAttribute("Seed", Config.Seed)
 			world:SetAttribute("RoomCount", #result.rooms)
 			print(

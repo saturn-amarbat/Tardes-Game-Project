@@ -43,9 +43,18 @@ keyPrompt.Triggered:Connect(function(player)
 	hatchPrompt.ObjectText = "Cellar • key recovered"
 end)
 
+-- The isolated forest preview omits the hallway package and retains its local hatch.
+local hallways = script.Parent:FindFirstChild("BunkerHallways")
+local fall = if hallways then require(hallways:WaitForChild("SquadFall")).attach(hatch, lift) else nil
+
 hatchPrompt.ObjectText = "Locked • check the kitchen"
 hatchPrompt.Triggered:Connect(function(player)
 	if recovered and hatchPrompt.Enabled and nearby(player, hatch) then
+		if fall then
+			hatchPrompt.ActionText = "Descend to landing"
+			fall()
+			return
+		end
 		hatchPrompt.Enabled = false
 		hatch.CanCollide = false
 		hatch.Transparency = 1

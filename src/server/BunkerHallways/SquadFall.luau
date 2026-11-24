@@ -21,6 +21,9 @@ local generation = 0
 local busy = false
 
 local function living(player: Player): (Model?, BasePart?)
+	if player:GetAttribute("SittingOut") or player:GetAttribute("DungeonEntered") then
+		return nil, nil
+	end
 	local char = player.Character
 	local root = if char then char:FindFirstChild("HumanoidRootPart") else nil
 	local hum = if char then char:FindFirstChildOfClass("Humanoid") else nil
@@ -29,9 +32,12 @@ local function living(player: Player): (Model?, BasePart?)
 	end
 	return nil, nil
 end
-local function valid(r: Rider): boolean
+local function valid(r: Rider, expedition: any): boolean
 	local character, root = living(r.player)
-	return r.player.Parent == Players and character == r.character and root == r.root
+	return Workspace:GetAttribute("ExpeditionNumber") == expedition
+		and r.player.Parent == Players
+		and character == r.character
+		and root == r.root
 end
 
 function SquadFall.attach(hatch: BasePart, lift: BasePart): () -> ()
@@ -68,16 +74,20 @@ function SquadFall.attach(hatch: BasePart, lift: BasePart): () -> ()
 		returning[player] = nil
 	end)
 
-	-- Keep the hatch solid throughout. The server moves the party exactly once
-	-- at blackout; nobody enters a physical free-fall or blocks a late arrival.
+	-- A shared group barrier keeps every eligible rider on the same cinematic clock.
 	return function()
 		if busy then
 			return
 		end
+		local expedition = Workspace:GetAttribute("ExpeditionNumber")
 		local riders: { Rider } = {}
 		for _, player in Players:GetPlayers() do
 			local char, root = living(player)
-			if char and root and not char:GetAttribute("BunkerLanded") then
+			if
+				char
+				and root
+				and (not char:GetAttribute("BunkerLanded") or char:GetAttribute("BunkerExpedition") ~= expedition)
+			then
 				local i = #riders
 				local spread =
 					Vector3.new((i % 2 - 0.5) * 5, landing.Size.Y / 2 + 3.5, (math.floor(i / 2) % 2 - 0.5) * 5)
@@ -113,13 +123,13 @@ function SquadFall.attach(hatch: BasePart, lift: BasePart): () -> ()
 		end
 		local duration = if Config.FallMode == "Skip" then 0 elseif Config.FallMode == "Short" then 0.4 else 1.7
 		for _, r in riders do
-			if valid(r) and not r.streamed then
+			if valid(r, expedition) and not r.streamed then
 				duration = 0
 			end
 		end
 		local arrival = Workspace:GetServerTimeNow() + duration
 		for _, r in riders do
-			if valid(r) then
+			if valid(r, expedition) then
 				r.root.Anchored = true
 				r.root.AssemblyLinearVelocity = Vector3.zero
 				r.root.AssemblyAngularVelocity = Vector3.zero
@@ -130,10 +140,11 @@ function SquadFall.attach(hatch: BasePart, lift: BasePart): () -> ()
 			task.wait(duration)
 		end
 		for _, r in riders do
-			if valid(r) then
+			if valid(r, expedition) then
 				r.character:PivotTo(r.destination)
 				r.root.AssemblyLinearVelocity = Vector3.zero
 				r.root.AssemblyAngularVelocity = Vector3.zero
+				r.character:SetAttribute("BunkerExpedition", expedition)
 				r.character:SetAttribute("BunkerLanded", true)
 				r.root.Anchored = r.anchored
 				-- While a slow client catches up, the server simulates the landing
@@ -144,7 +155,7 @@ function SquadFall.attach(hatch: BasePart, lift: BasePart): () -> ()
 						pcall(function()
 							r.player:RequestStreamAroundAsync(r.destination.Position, 5)
 						end)
-						if valid(r) and r.root:CanSetNetworkOwnership() then
+						if valid(r, expedition) and r.root:CanSetNetworkOwnership() then
 							r.root:SetNetworkOwnershipAuto()
 						end
 					end)

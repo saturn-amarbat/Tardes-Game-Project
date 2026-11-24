@@ -54,46 +54,54 @@ instruction.Parent = counterFrame
 -- Centre clue reader panel (hidden by default).
 local cluePanel = Instance.new("Frame")
 cluePanel.Name = "CluePanel"
-cluePanel.Size = UDim2.fromScale(0.5, 0.3)
-cluePanel.Position = UDim2.fromScale(0.25, 0.35)
-cluePanel.BackgroundColor3 = Color3.fromRGB(15, 12, 10)
-cluePanel.BackgroundTransparency = 0.1
+cluePanel.AnchorPoint = Vector2.new(0.5, 0.5)
+cluePanel.Size = UDim2.fromOffset(440, 220)
+cluePanel.Position = UDim2.fromScale(0.5, 0.5)
+cluePanel.BackgroundColor3 = Color3.fromRGB(22, 19, 15)
+cluePanel.BackgroundTransparency = 0.06
 cluePanel.Visible = false
 cluePanel.Parent = gui
 
 local cluePanelCorner = Instance.new("UICorner")
-cluePanelCorner.CornerRadius = UDim.new(0, 10)
+cluePanelCorner.CornerRadius = UDim.new(0, 8)
 cluePanelCorner.Parent = cluePanel
 
+local clueStroke = Instance.new("UIStroke")
+clueStroke.Color = Color3.fromRGB(132, 108, 72)
+clueStroke.Thickness = 1.5
+clueStroke.Transparency = 0.25
+clueStroke.Parent = cluePanel
+
 local clueTitle = Instance.new("TextLabel")
-clueTitle.Size = UDim2.new(1, -20, 0, 36)
-clueTitle.Position = UDim2.fromOffset(10, 10)
+clueTitle.Size = UDim2.new(1, -90, 0, 36)
+clueTitle.Position = UDim2.fromOffset(18, 14)
 clueTitle.BackgroundTransparency = 1
-clueTitle.TextColor3 = Color3.fromRGB(240, 200, 140)
-clueTitle.Font = Enum.Font.GothamBold
-clueTitle.TextSize = 18
+clueTitle.TextColor3 = Color3.fromRGB(242, 212, 154)
+clueTitle.Font = Enum.Font.Garamond
+clueTitle.TextSize = 24
 clueTitle.TextXAlignment = Enum.TextXAlignment.Left
 clueTitle.Text = ""
 clueTitle.Parent = cluePanel
 
 local clueBody = Instance.new("TextLabel")
-clueBody.Size = UDim2.new(1, -20, 1, -60)
-clueBody.Position = UDim2.fromOffset(10, 50)
+clueBody.Size = UDim2.new(1, -36, 1, -68)
+clueBody.Position = UDim2.fromOffset(18, 54)
 clueBody.BackgroundTransparency = 1
-clueBody.TextColor3 = Color3.new(1, 1, 1)
+clueBody.TextColor3 = Color3.fromRGB(232, 226, 214)
 clueBody.Font = Enum.Font.Gotham
 clueBody.TextSize = 15
 clueBody.TextWrapped = true
 clueBody.TextXAlignment = Enum.TextXAlignment.Left
+clueBody.TextYAlignment = Enum.TextYAlignment.Top
 clueBody.Text = ""
 clueBody.Parent = cluePanel
 
 -- Close button.
 local clueClose = Instance.new("TextButton")
-clueClose.Size = UDim2.fromOffset(60, 28)
-clueClose.Position = UDim2.new(1, -70, 0, 8)
-clueClose.BackgroundColor3 = Color3.fromRGB(80, 30, 30)
-clueClose.TextColor3 = Color3.new(1, 1, 1)
+clueClose.Size = UDim2.fromOffset(64, 28)
+clueClose.Position = UDim2.new(1, -78, 0, 14)
+clueClose.BackgroundColor3 = Color3.fromRGB(74, 34, 30)
+clueClose.TextColor3 = Color3.fromRGB(240, 234, 224)
 clueClose.Font = Enum.Font.GothamBold
 clueClose.TextSize = 13
 clueClose.Text = "Close"

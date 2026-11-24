@@ -24,13 +24,16 @@ c:/Users/sanch/Projects/horror-game/
 └── src/
     ├── client/                         # StarterPlayerScripts/Client
     │   ├── init.client.luau            # Client bootstrap & controller startup
+    │   ├── FieldJournal.luau           # [J] Lore archive, flashlight tints & squad support UI
     │   ├── FlashlightController.luau   # Detached damped flashlight, sway, raycast clip, battery
     │   ├── FlashlightOptics.luau       # Dual-cone SpotLights, mobile FillPointLight & dust Beam
     │   ├── FlashlightReplicaClient.luau# Teammate flashlight SpotLight replication renderer
     │   ├── ForestWeather.client.luau   # Overcast dusk fog/sky/exposure above cellar threshold
-    │   ├── ObjectiveHUD.luau           # Keys/fuses/scrap, battery/HP bars, damage flash, CluePanel
+    │   ├── HorrorFeedback.luau         # Stalker proximity heartbeat vignette, grade & safe badge
+    │   ├── ObjectiveHUD.luau           # Keys/fuses/scrap, battery/HP/stamina bars, CluePanel
     │   ├── PrologueController.luau     # Blackpine location card, guidance & omen skip UI
-    │   └── SpectatorController.luau    # Spectator camera cycling & earned Revive Token UI
+    │   ├── SpectatorController.luau    # Spectator camera cycling & earned Revive Token UI
+    │   └── SprintController.luau       # Horror stamina/sprint (LeftShift/L3/touch) + FOV kick
     ├── server/                         # ServerScriptService/Server
     │   ├── init.server.luau            # Server bootstrap & expedition generation loop
     │   ├── InteractionRouter.luau      # Centralized ProximityPromptService validator & hold cleanup

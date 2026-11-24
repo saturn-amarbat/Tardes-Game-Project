@@ -87,6 +87,36 @@ local function buildSafeRoomTemplate(): Model
 	part("WallLeft", Vector3.new(1, 11, 26), CFrame.new(-10.5, 5.5, 0), concrete, Enum.Material.Concrete, true)
 	part("WallRight", Vector3.new(1, 11, 26), CFrame.new(10.5, 5.5, 0), concrete, Enum.Material.Concrete, true)
 
+	-- Cozy sanctuary architecture: woven runner, ceiling rafters, timber posts & warm wall sconces
+	part(
+		"SanctuaryRunner",
+		Vector3.new(4.4, 0.06, 22),
+		CFrame.new(0, 0.03, 0),
+		Color3.fromRGB(72, 46, 40),
+		Enum.Material.Fabric,
+		false
+	)
+	for _, z in { -9, 0, 9 } do
+		part("BeamTop", Vector3.new(20, 0.55, 0.6), CFrame.new(0, 10.7, z), timber, Enum.Material.Wood, false)
+		part("PostR", Vector3.new(0.55, 11, 0.55), CFrame.new(9.7, 5.5, z), timber, Enum.Material.Wood, false)
+	end
+	for _, z in { -6, 6 } do
+		local sconce = part(
+			"WallSconce",
+			Vector3.new(0.35, 0.6, 0.5),
+			CFrame.new(9.7, 6.2, z),
+			Color3.fromRGB(255, 198, 116),
+			Enum.Material.Neon,
+			false
+		)
+		local sl = Instance.new("PointLight")
+		sl.Color = Color3.fromRGB(255, 196, 118)
+		sl.Range = 20
+		sl.Brightness = 0.95
+		sl.Shadows = false
+		sl.Parent = sconce
+	end
+
 	local function anchor(name: string, pos: Vector3, lookDir: Vector3): Part
 		local a = Instance.new("Part")
 		a.Name = name

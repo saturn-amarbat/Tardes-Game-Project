@@ -7,6 +7,7 @@ local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 
 local FlashlightController = require(script.Parent.FlashlightController)
+local SprintController = require(script.Parent.SprintController)
 
 local player = Players.LocalPlayer
 local playerGui = player.PlayerGui
@@ -191,6 +192,30 @@ healthText.TextStrokeTransparency = 0.5
 healthText.Text = "Health 100%"
 healthText.Parent = healthFrame
 
+-- Slim stamina bar directly below HealthFrame.
+local staminaFrame = Instance.new("Frame")
+staminaFrame.Name = "StaminaFrame"
+staminaFrame.Size = UDim2.fromOffset(290, 11)
+staminaFrame.Position = UDim2.fromOffset(16, 133)
+staminaFrame.BackgroundColor3 = Color3.fromRGB(20, 26, 24)
+staminaFrame.BackgroundTransparency = 0.2
+staminaFrame.Parent = gui
+
+local staminaCorner = Instance.new("UICorner")
+staminaCorner.CornerRadius = UDim.new(0, 4)
+staminaCorner.Parent = staminaFrame
+
+local staminaFill = Instance.new("Frame")
+staminaFill.Name = "Fill"
+staminaFill.Size = UDim2.fromScale(1, 1)
+staminaFill.BackgroundColor3 = Color3.fromRGB(168, 206, 224)
+staminaFill.BorderSizePixel = 0
+staminaFill.Parent = staminaFrame
+
+local staminaFillCorner = Instance.new("UICorner")
+staminaFillCorner.CornerRadius = UDim.new(0, 4)
+staminaFillCorner.Parent = staminaFill
+
 -- Red damage flash overlay when taking Stalker damage.
 local damageFlash = Instance.new("Frame")
 damageFlash.Name = "DamageFlash"
@@ -247,6 +272,7 @@ local function init()
 		counterFrame.Visible = underground and not waiting and phase == "Active"
 		batteryFrame.Visible = counterFrame.Visible
 		healthFrame.Visible = counterFrame.Visible
+		staminaFrame.Visible = counterFrame.Visible
 		instruction.Text = if matchRemotes:GetAttribute("ExitOpen")
 			then "Reach the extraction bulkhead"
 			elseif matchRemotes:GetAttribute("ObjectivesComplete") then "Operate the exit levers"
@@ -277,6 +303,7 @@ local function init()
 
 	local lastPct = -1
 	local lastHp = 100
+	local lastStam = -1
 	RunService.Heartbeat:Connect(function()
 		local char = player.Character
 		local hum = char and char:FindFirstChildOfClass("Humanoid")
@@ -309,6 +336,15 @@ local function init()
 				elseif pct <= 45 then Color3.fromRGB(224, 168, 76)
 				else Color3.fromRGB(238, 214, 152)
 			batteryText.Text = string.format("Battery %d%%", pct)
+		end
+
+		local stamPct = math.clamp(math.floor(SprintController.getStamina() + 0.5), 0, 100)
+		if stamPct ~= lastStam then
+			lastStam = stamPct
+			staminaFill.Size = UDim2.fromScale(stamPct / 100, 1)
+			staminaFill.BackgroundColor3 = if stamPct <= 25
+				then Color3.fromRGB(218, 128, 86)
+				else Color3.fromRGB(168, 206, 224)
 		end
 	end)
 

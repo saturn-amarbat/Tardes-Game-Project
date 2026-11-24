@@ -11,6 +11,10 @@ local playerGui = player.PlayerGui
 
 -- ── Build the dialogue / guidance UI ─────────────────────────────────────────
 local function buildDialogueUI(): (ScreenGui, TextLabel, TextButton)
+	local old = playerGui:FindFirstChild("PrologueUI")
+	if old then
+		old:Destroy()
+	end
 	local gui = Instance.new("ScreenGui")
 	gui.Name = "PrologueUI"
 	gui.ResetOnSpawn = false

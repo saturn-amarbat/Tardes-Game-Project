@@ -21,7 +21,6 @@
        and ShopCatalog cosmetic tints / battery gifts.
 ]]
 
-local ContextActionService = game:GetService("ContextActionService")
 local HapticService = game:GetService("HapticService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -61,8 +60,8 @@ local CONFIG = {
 	TELEPORT_SNAP_DISTANCE = 25,
 }
 
-local ACTION_NAME = "ToggleFlashlight"
 local RENDER_STEP = "AimFlashlight"
+local inputConn: RBXScriptConnection? = nil
 
 -- ── State ───────────────────────────────────────────────────────────────────
 local player = Players.LocalPlayer
@@ -98,7 +97,21 @@ local function hapticPulse()
 	end
 end
 
+local function cleanupStaleFlashlights()
+	for _, container in { Workspace, Workspace.CurrentCamera } do
+		if container then
+			for _, child in container:GetChildren() do
+				if child.Name == "FlashlightEmitter" or child.Name == "ClientFlashlightRig" then
+					child:Destroy()
+				end
+			end
+		end
+	end
+end
+
 local function createFlashlightEmitter(): (Part, SpotLight, SpotLight, PointLight, Beam, Sound)
+	cleanupStaleFlashlights()
+
 	local emitter = Instance.new("Part")
 	emitter.Name = "FlashlightEmitter"
 	emitter.Size = Vector3.new(0.2, 0.2, 0.2)
@@ -114,7 +127,7 @@ local function createFlashlightEmitter(): (Part, SpotLight, SpotLight, PointLigh
 		currentCFrame = camera.CFrame * CFrame.new(0, 0, -0.5)
 		emitter.CFrame = currentCFrame
 	end
-	emitter.Parent = Workspace
+	emitter.Parent = camera or Workspace
 
 	local core, spill, fill, beam = FlashlightOptics.localBeam(emitter, CONFIG)
 
@@ -151,9 +164,15 @@ local function ensureTouchButton()
 		return
 	end
 
+	-- Clean up duplicate touch fallback if re-initialized
+	local oldFallback = player.PlayerGui:FindFirstChild("FlashlightHUD_Fallback")
+	if oldFallback then
+		oldFallback:Destroy()
+	end
+
 	local gui = Instance.new("ScreenGui")
 	gui.Name = "FlashlightHUD_Fallback"
-	gui.ResetOnSpawn = false
+	gui.ResetOnSpawn = true
 	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	gui.Parent = player.PlayerGui
 
@@ -285,19 +304,18 @@ function FlashlightController.init()
 	dustBeam = beam
 	clickSound = sfx
 
-	-- ContextActionService binding (keyboard F + gamepad ButtonY)
-	ContextActionService:BindAction(
-		ACTION_NAME,
-		function(_name: string, state: Enum.UserInputState, _input: InputObject)
-			if state == Enum.UserInputState.Begin then
-				FlashlightController.toggle()
-			end
-			return Enum.ContextActionResult.Sink
-		end,
-		false,
-		CONFIG.ToggleKey,
-		CONFIG.GamepadToggleKey
-	)
+	-- Input handling via UserInputService (works cleanly even while holding Shift / Shift-Lock)
+	if inputConn then
+		inputConn:Disconnect()
+	end
+	inputConn = UserInputService.InputBegan:Connect(function(input: InputObject, gameProcessed: boolean)
+		if gameProcessed then
+			return
+		end
+		if input.KeyCode == CONFIG.ToggleKey or input.KeyCode == CONFIG.GamepadToggleKey then
+			FlashlightController.toggle()
+		end
+	end)
 
 	ensureTouchButton()
 
@@ -360,7 +378,11 @@ function FlashlightController.init()
 		end
 	end)
 
-	-- Frame-rate-independent smooth camera tracking + layered sway + battery/flicker
+	-- Frame-rate-independent smooth camera tracking + wall-clip raycast + layered sway + battery/flicker
+	local clipParams = RaycastParams.new()
+	clipParams.FilterType = Enum.RaycastFilterType.Exclude
+	clipParams.RespectCanCollide = true
+
 	RunService:BindToRenderStep(RENDER_STEP, Enum.RenderPriority.Camera.Value + 1, function(dt: number)
 		swayTime += dt
 
@@ -383,6 +405,22 @@ function FlashlightController.init()
 
 			local swayOffset = CFrame.new(idleX + walkX, idleY + walkY, -0.5)
 			local targetCFrame = camera.CFrame * swayOffset
+
+			-- Prevent emitter from clipping into walls in Future lighting
+			local exclude: { Instance } = { emitterPart }
+			if character then
+				table.insert(exclude, character)
+			end
+			clipParams.FilterDescendantsInstances = exclude
+			local camPos = camera.CFrame.Position
+			local delta = targetCFrame.Position - camPos
+			if delta.Magnitude > 0.01 then
+				local hit = Workspace:Raycast(camPos, delta, clipParams)
+				if hit then
+					local safePos = hit.Position - delta.Unit * 0.12
+					targetCFrame = CFrame.new(safePos) * targetCFrame.Rotation
+				end
+			end
 
 			if (currentCFrame.Position - targetCFrame.Position).Magnitude > CONFIG.TELEPORT_SNAP_DISTANCE then
 				currentCFrame = targetCFrame
@@ -421,7 +459,10 @@ function FlashlightController.init()
 end
 
 function FlashlightController.destroy()
-	ContextActionService:UnbindAction(ACTION_NAME)
+	if inputConn then
+		inputConn:Disconnect()
+		inputConn = nil
+	end
 	RunService:UnbindFromRenderStep(RENDER_STEP)
 	if emitterPart then
 		emitterPart:Destroy()

@@ -16,6 +16,11 @@ local hatchPrompt = hatch:WaitForChild("Prompt") :: ProximityPrompt
 local liftPrompt = lift:WaitForChild("Prompt") :: ProximityPrompt
 
 local function nearby(player: Player, part: BasePart): Model?
+	local match = game:GetService("ReplicatedStorage"):FindFirstChild("MatchRemotes")
+	local phase = match and match:GetAttribute("RunState")
+	if player:GetAttribute("SittingOut") or (phase and phase ~= "Forest" and phase ~= "Active") then
+		return nil
+	end
 	local character = player.Character
 	local body = if character then character:FindFirstChild("HumanoidRootPart") else nil
 	local humanoid = if character then character:FindFirstChildOfClass("Humanoid") else nil
@@ -33,6 +38,17 @@ end
 
 -- The key belongs to the expedition. Its finder can leave without stranding the party.
 local recovered = false
+local originalKeyTransparency = key.Transparency
+local originalHatchTransparency = hatch.Transparency
+Workspace:GetAttributeChangedSignal("ExpeditionNumber"):Connect(function()
+	recovered = false
+	key.Transparency = originalKeyTransparency
+	keyPrompt.Enabled = true
+	hatch.CanCollide = true
+	hatch.Transparency = originalHatchTransparency
+	hatchPrompt.Enabled = true
+	hatchPrompt.ObjectText = "Locked • check the kitchen"
+end)
 keyPrompt.Triggered:Connect(function(player)
 	if recovered or not nearby(player, key) then
 		return
@@ -56,7 +72,7 @@ end)
 local busy: { [Player]: boolean } = {}
 liftPrompt.Triggered:Connect(function(player)
 	local character = nearby(player, lift)
-	if not character or busy[player] then
+	if not character or busy[player] or hatchPrompt.Enabled or player:GetAttribute("DungeonEntered") then
 		return
 	end
 	local dungeon = Workspace:FindFirstChild("GeneratedDungeon")

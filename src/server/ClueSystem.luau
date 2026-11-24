@@ -19,27 +19,30 @@ local Workspace = game:GetService("Workspace")
 
 local ClueData = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ClueData"))
 
+local ObjectivePickups = require(script.Parent.ObjectivePickups)
 local ClueSystem = {}
 
 -- ── Remotes ───────────────────────────────────────────────────────────────────
 local function ensureRemote(parent: Instance, name: string): RemoteEvent
 	local ev = parent:FindFirstChild(name) :: RemoteEvent?
-	if not ev then
-		ev = Instance.new("RemoteEvent")
-		ev.Name = name
-		ev.Parent = parent
+	if ev then
+		return ev
 	end
-	return ev :: RemoteEvent
+	local created = Instance.new("RemoteEvent")
+	created.Name = name
+	created.Parent = parent
+	return created
 end
 
 local function ensureFolder(parent: Instance, name: string): Folder
 	local f = parent:FindFirstChild(name) :: Folder?
-	if not f then
-		f = Instance.new("Folder")
-		f.Name = name
-		f.Parent = parent
+	if f then
+		return f
 	end
-	return f :: Folder
+	local created = Instance.new("Folder")
+	created.Name = name
+	created.Parent = parent
+	return created
 end
 
 -- ── Graybox placeholder prop ──────────────────────────────────────────────────
@@ -82,7 +85,14 @@ local function attachCluePrompt(
 	collectLight.Enabled = false
 	collectLight.Parent = prop
 
-	prompt.Triggered:Connect(function(_player: Player)
+	prompt.Triggered:Connect(function(player: Player)
+		if
+			not prompt.Enabled
+			or clueFolder:FindFirstChild(entry.id)
+			or not ObjectivePickups.inReach(player, prop, prompt.MaxActivationDistance)
+		then
+			return
+		end
 		-- Mark collected server-side.
 		local marker = Instance.new("BoolValue")
 		marker.Name = entry.id
@@ -102,6 +112,7 @@ function ClueSystem.init(rooms: { Model })
 	local clueEvent = ensureRemote(matchRemotes, "ClueCollected")
 	local clueFolder = ensureFolder(matchRemotes, "CollectedClues")
 
+	clueFolder:ClearAllChildren()
 	local dungeonFolder = Workspace:FindFirstChild("GeneratedDungeon") :: Folder?
 	if not dungeonFolder then
 		warn("[ClueSystem] GeneratedDungeon not found.")

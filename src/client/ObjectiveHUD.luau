@@ -10,7 +10,6 @@
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local TweenService = game:GetService("TweenService")
 
 local player = Players.LocalPlayer
 local playerGui = player.PlayerGui
@@ -21,9 +20,7 @@ gui.Name = "ObjectiveHUD"
 gui.ResetOnSpawn = false
 gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 gui.Enabled = player:GetAttribute("DungeonEntered") == true
-player:GetAttributeChangedSignal("DungeonEntered"):Connect(function()
-	gui.Enabled = player:GetAttribute("DungeonEntered") == true
-end)
+
 gui.Parent = playerGui
 
 -- Top-left objective counter.
@@ -117,15 +114,6 @@ flashLabel.Text = ""
 flashLabel.TextTransparency = 1
 flashLabel.Parent = gui
 
-local function flashText(text: string)
-	flashLabel.Text = text
-	flashLabel.TextTransparency = 0
-	TweenService:Create(flashLabel, TweenInfo.new(2.5, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
-		TextTransparency = 1,
-	}):Play()
-end
-
--- ── Wire remotes ──────────────────────────────────────────────────────────────
 local function init()
 	local matchRemotes = ReplicatedStorage:WaitForChild("MatchRemotes", 10)
 	if not matchRemotes then
@@ -133,11 +121,35 @@ local function init()
 		return
 	end
 
-	local progressEv = matchRemotes:WaitForChild("ObjectiveProgress", 10) :: RemoteEvent?
 	local clueEv = matchRemotes:WaitForChild("ClueCollected", 10) :: RemoteEvent?
-	local doorEv = matchRemotes:WaitForChild("DoorUnlocked", 10) :: RemoteEvent?
 
 	local function refreshProgress()
+		local phase = matchRemotes:GetAttribute("RunState")
+		local waiting = player:GetAttribute("SittingOut") == true
+		local underground = player:GetAttribute("DungeonEntered") == true
+		local message = ""
+		if phase == "Escaped" then
+			message = "Squad escaped! Next expedition soon."
+		elseif phase == "Wiped" then
+			message = "Squad lost. Next expedition soon."
+		elseif waiting then
+			message = "Waiting for the next expedition"
+		elseif underground and matchRemotes:GetAttribute("ExitOpen") then
+			message = "Exit open • extract at the bulkhead"
+		elseif underground and matchRemotes:GetAttribute("ObjectivesComplete") then
+			message = if matchRemotes:GetAttribute("Survivors") == 1
+				then "Hold one exit lever for 3 seconds"
+				else "Hold both exit levers together for 3 seconds"
+		end
+		gui.Enabled = underground or waiting or message ~= ""
+		counterFrame.Visible = underground and not waiting
+		flashLabel.Text = message
+		flashLabel.TextSize = 21
+		flashLabel.TextWrapped = true
+		flashLabel.TextTransparency = 0
+		if not underground or waiting then
+			cluePanel.Visible = false
+		end
 		counterLabel.Text = string.format(
 			"🔑 %d/%d  🔧 %d/%d",
 			matchRemotes:GetAttribute("Keys") or 0,
@@ -149,26 +161,17 @@ local function init()
 	matchRemotes.AttributeChanged:Connect(refreshProgress)
 	refreshProgress()
 
-	if progressEv then
-		progressEv.OnClientEvent:Connect(
-			function(data: { keys: number, keysTotal: number, fuses: number, fusesTotal: number })
-				counterLabel.Text =
-					string.format("🔑 %d/%d  🔧 %d/%d", data.keys, data.keysTotal, data.fuses, data.fusesTotal)
-			end
-		)
-	end
+	player:GetAttributeChangedSignal("DungeonEntered"):Connect(refreshProgress)
+	player:GetAttributeChangedSignal("SittingOut"):Connect(refreshProgress)
 
 	if clueEv then
 		clueEv.OnClientEvent:Connect(function(entry: { title: string, body: string })
+			if not gui.Enabled or player:GetAttribute("SittingOut") then
+				return
+			end
 			clueTitle.Text = entry.title
 			clueBody.Text = entry.body
 			cluePanel.Visible = true
-		end)
-	end
-
-	if doorEv then
-		doorEv.OnClientEvent:Connect(function(_doorName: string)
-			flashText("EXIT OPEN!")
 		end)
 	end
 

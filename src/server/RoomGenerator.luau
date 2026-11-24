@@ -66,6 +66,13 @@ function RoomGenerator.generate(numRooms: number): { Model }
 			-- To snap entrance flush with exit (which faces outward into the next room):
 			-- targetEntranceCF = currentExitCF * CFrame.Angles(0, math.pi, 0)
 			local targetEntranceCF = currentExitCF * CFrame.Angles(0, math.pi, 0)
+			local spawnPad = Workspace:FindFirstChild("StartSpawn")
+			if roomIndex == 1 and spawnPad and spawnPad:IsA("BasePart") then
+				-- Keep the room floor above the shared place's baseplate.
+				targetEntranceCF = CFrame.new(
+					spawnPad.Position + Vector3.yAxis * (spawnPad.Size.Y + entrance.Size.Y) / 2
+				) * targetEntranceCF.Rotation
+			end
 			local entranceLocalCF = candidate:GetPivot():ToObjectSpace(entrance.CFrame)
 			local newRoomPivot = targetEntranceCF * entranceLocalCF:Inverse()
 

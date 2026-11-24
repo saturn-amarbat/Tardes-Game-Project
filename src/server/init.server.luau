@@ -1,5 +1,5 @@
 --!strict
-local RoomGenerator = require(script.Parent.RoomGenerator)
+local RoomGenerator = require(script.RoomGenerator)
 
 print("[ServerInit] Starting Procedural Room Generation...")
 local rooms = RoomGenerator.generate(10)

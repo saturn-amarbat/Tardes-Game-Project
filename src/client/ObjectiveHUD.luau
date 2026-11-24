@@ -1,12 +1,5 @@
 --!strict
---[[
-  ObjectiveHUD  –  CLIENT-SIDE
-
-  Listens to:
-    MatchRemotes/ObjectiveProgress  → updates key/fuse counters.
-    MatchRemotes/ClueCollected      → shows collected clue text.
-    MatchRemotes/DoorUnlocked       → shows "EXIT OPEN!" flash.
-]]
+-- Uses replicated expedition state and displays clue text when it arrives.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -26,24 +19,37 @@ gui.Parent = playerGui
 -- Top-left objective counter.
 local counterFrame = Instance.new("Frame")
 counterFrame.Name = "CounterFrame"
-counterFrame.Size = UDim2.fromOffset(200, 60)
+counterFrame.Size = UDim2.fromOffset(232, 71)
 counterFrame.Position = UDim2.fromOffset(16, 16)
-counterFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
-counterFrame.BackgroundTransparency = 0.4
+counterFrame.BackgroundColor3 = Color3.fromRGB(26, 41, 37)
+counterFrame.BackgroundTransparency = 0.16
 counterFrame.Parent = gui
 
 local counterCorner = Instance.new("UICorner")
-counterCorner.CornerRadius = UDim.new(0, 8)
+counterCorner.CornerRadius = UDim.new(0, 4)
 counterCorner.Parent = counterFrame
 
 local counterLabel = Instance.new("TextLabel")
-counterLabel.Size = UDim2.fromScale(1, 1)
+counterLabel.Size = UDim2.new(1, -24, 0, 24)
+counterLabel.Position = UDim2.fromOffset(12, 8)
+counterLabel.TextXAlignment = Enum.TextXAlignment.Left
 counterLabel.BackgroundTransparency = 1
 counterLabel.TextColor3 = Color3.new(1, 1, 1)
 counterLabel.Font = Enum.Font.GothamMedium
 counterLabel.TextSize = 16
-counterLabel.Text = "🔑 0/0  🔧 0/0"
+counterLabel.Text = ""
 counterLabel.Parent = counterFrame
+
+local instruction = Instance.new("TextLabel")
+instruction.Size = UDim2.new(1, -24, 0, 30)
+instruction.Position = UDim2.fromOffset(12, 31)
+instruction.BackgroundTransparency = 1
+instruction.TextColor3 = Color3.fromRGB(225, 202, 153)
+instruction.Font = Enum.Font.Gotham
+instruction.TextSize = 13
+instruction.TextWrapped = true
+instruction.TextXAlignment = Enum.TextXAlignment.Left
+instruction.Parent = counterFrame
 
 -- Centre clue reader panel (hidden by default).
 local cluePanel = Instance.new("Frame")
@@ -142,7 +148,11 @@ local function init()
 				else "Hold both exit levers together for 3 seconds"
 		end
 		gui.Enabled = underground or waiting or message ~= ""
-		counterFrame.Visible = underground and not waiting
+		counterFrame.Visible = underground and not waiting and phase == "Active"
+		instruction.Text = if matchRemotes:GetAttribute("ExitOpen")
+			then "Reach the extraction bulkhead"
+			elseif matchRemotes:GetAttribute("ObjectivesComplete") then "Operate the exit levers"
+			else "Search the galleries for supplies"
 		flashLabel.Text = message
 		flashLabel.TextSize = 21
 		flashLabel.TextWrapped = true
@@ -151,7 +161,7 @@ local function init()
 			cluePanel.Visible = false
 		end
 		counterLabel.Text = string.format(
-			"🔑 %d/%d  🔧 %d/%d",
+			"Keys %d/%d    Fuses %d/%d",
 			matchRemotes:GetAttribute("Keys") or 0,
 			matchRemotes:GetAttribute("KeysTotal") or 1,
 			matchRemotes:GetAttribute("Fuses") or 0,

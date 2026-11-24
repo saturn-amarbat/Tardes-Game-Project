@@ -1,5 +1,5 @@
 --!strict
-local FlashlightController = require(script.Parent.FlashlightController)
+local FlashlightController = require(script.FlashlightController)
 
 FlashlightController.init()
 

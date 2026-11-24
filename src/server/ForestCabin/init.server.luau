@@ -73,21 +73,34 @@ liftPrompt.Triggered:Connect(function(player)
 		return
 	end
 	busy[player] = true
-	local candidate = entrance.Position - entrance.CFrame.LookVector * 4
-	if Workspace.StreamingEnabled then
-		pcall(function()
-			player:RequestStreamAroundAsync(candidate, 6)
-		end)
+	local filter = RaycastParams.new()
+	filter.FilterType = Enum.RaycastFilterType.Include
+	filter.FilterDescendantsInstances = { first :: Instance }
+	filter.RespectCanCollide = true
+	local floor: RaycastResult? = nil
+	-- Builder templates can orient their doorway anchors in either direction.
+	for _, direction in { -1, 1 } do
+		local candidate = entrance.Position + entrance.CFrame.LookVector * (4 * direction)
+		local hit = Workspace:Raycast(candidate + Vector3.yAxis * 3, -Vector3.yAxis * 12, filter)
+		if hit and hit.Normal.Y > 0.65 then
+			floor = hit
+			break
+		end
+	end
+	if not floor then
+		busy[player] = nil
+		return
+	end
+	local destination = floor.Position + Vector3.yAxis * 3.5
+	local streamed = pcall(function()
+		player:RequestStreamAroundAsync(destination, 6)
+	end)
+	if not streamed then
+		busy[player] = nil
+		return
 	end
 	if character == nearby(player, lift) and first and first.Parent == dungeon then
-		local filter = RaycastParams.new()
-		filter.FilterType = Enum.RaycastFilterType.Include
-		filter.FilterDescendantsInstances = { first }
-		filter.RespectCanCollide = true
-		local floor = Workspace:Raycast(candidate + Vector3.yAxis * 3, -Vector3.yAxis * 12, filter)
-		if floor and floor.Normal.Y > 0.65 then
-			character:PivotTo(CFrame.new(floor.Position + Vector3.yAxis * 3.5))
-		end
+		character:PivotTo(CFrame.new(destination))
 	end
 	busy[player] = nil
 end)

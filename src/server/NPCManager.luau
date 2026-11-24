@@ -152,8 +152,8 @@ local function spawnRoomInstance(room: Model, npcFolder: Folder, flickerRemote: 
 			local hrp = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
 			if hrp and (hrp.Position - npcPos).Magnitude < 6 then
 				lastScare = now
-				-- Trigger flashlight flicker on this player's client (1.5 s, medium intensity).
-				flickerRemote:FireClient(player, 1.5, 0.7)
+				-- Trigger flashlight flicker + battery drain on this player's client.
+				flickerRemote:FireClient(player, 1.5, 0.7, 12)
 				-- Brief flash-and-hide of the NPC.
 				task.spawn(function()
 					local body = npc.PrimaryPart
@@ -229,7 +229,7 @@ local function spawnStalker(room: Model, npcFolder: Folder)
 			return
 		end
 
-		-- Find nearest player (players with flashlights OFF are harder to detect in the dark).
+		-- Find nearest player (players with flashlights OFF are harder to detect; SafeRoom is immune).
 		local stalkerPos = stalker:GetPivot().Position
 		local nearestDist = math.huge
 		local nearestEffective = math.huge
@@ -237,7 +237,12 @@ local function spawnStalker(room: Model, npcFolder: Folder)
 		for _, player in ipairs(Players:GetPlayers()) do
 			local char = player.Character
 			local hrp = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
-			if hrp and player:GetAttribute("DungeonEntered") and not player:GetAttribute("SittingOut") then
+			if
+				hrp
+				and player:GetAttribute("DungeonEntered")
+				and not player:GetAttribute("SittingOut")
+				and not player:GetAttribute("InSafeRoom")
+			then
 				local d = (hrp.Position - stalkerPos).Magnitude
 				local lightMult = if player:GetAttribute("FlashlightOn") == true then 1 else 1.75
 				local effective = d * lightMult
@@ -327,22 +332,25 @@ function NPCManager.init(rooms: { Model })
 		return
 	end
 
-	-- Spawn 3-5 passive toads spread across first third of dungeon.
+	-- Spawn 3-5 passive toads spread across first third of dungeon (plus SafeRoom toads).
 	local toadCount = math.random(3, 5)
 	for _ = 1, toadCount do
 		local room = rooms[math.random(1, math.max(1, math.floor(numRooms / 3)))]
 		spawnToad(room, npcFolder :: Folder)
 	end
 
-	-- Spawn RoomInstanceNPC in roughly every third room (middle section).
+	-- Spawn RoomInstanceNPC in middle rooms, skipping any SafeRoom.
 	for i = math.max(1, math.floor(numRooms / 3)), math.floor(numRooms * 2 / 3) do
-		if math.random() > 0.5 then
+		if rooms[i]:GetAttribute("SafeRoom") ~= true and math.random() > 0.5 then
 			spawnRoomInstance(rooms[i], npcFolder :: Folder, flickerRemote)
 		end
 	end
 
-	-- Spawn MainNPC_Stalker in the final third of the dungeon.
+	-- Spawn MainNPC_Stalker in the final third of the dungeon (outside SafeRoom).
 	local stalkerRoom = rooms[math.max(1, math.floor(numRooms * 0.7))]
+	if stalkerRoom:GetAttribute("SafeRoom") == true and numRooms > 1 then
+		stalkerRoom = rooms[numRooms]
+	end
 	spawnStalker(stalkerRoom, npcFolder :: Folder)
 
 	print(string.format("[NPCManager] Spawned %d toads, RoomInstanceNPCs, and 1 Stalker.", toadCount))

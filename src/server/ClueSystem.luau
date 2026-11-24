@@ -129,7 +129,7 @@ function ClueSystem.init(rooms: { Model })
 
 	local placed = 0
 	for roomIdx, room in ipairs(rooms) do
-		if roomIdx == 1 then
+		if roomIdx == 1 or room:GetAttribute("SafeRoom") == true then
 			continue
 		end
 		if placed >= #cluePool then

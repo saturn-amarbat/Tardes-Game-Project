@@ -50,6 +50,8 @@ local CONFIG = {
 	SpillBrightness = 0.75,
 	SpillRange = 26,
 	SpillColor = Color3.fromRGB(235, 240, 255),
+	FillBrightness = 0.25,
+	FillRange = 10,
 	BeamLength = 14,
 	BeamWidth0 = 0.35,
 	BeamWidth1 = 5.5,
@@ -74,6 +76,7 @@ local flickerToken = 0
 local emitterPart: Part? = nil
 local coreLight: SpotLight? = nil
 local spillLight: SpotLight? = nil
+local fillLight: PointLight? = nil
 local dustBeam: Beam? = nil
 local clickSound: Sound? = nil
 
@@ -95,7 +98,7 @@ local function hapticPulse()
 	end
 end
 
-local function createFlashlightEmitter(): (Part, SpotLight, SpotLight, Beam, Sound)
+local function createFlashlightEmitter(): (Part, SpotLight, SpotLight, PointLight, Beam, Sound)
 	local emitter = Instance.new("Part")
 	emitter.Name = "FlashlightEmitter"
 	emitter.Size = Vector3.new(0.2, 0.2, 0.2)
@@ -113,7 +116,7 @@ local function createFlashlightEmitter(): (Part, SpotLight, SpotLight, Beam, Sou
 	end
 	emitter.Parent = Workspace
 
-	local core, spill, beam = FlashlightOptics.localBeam(emitter, CONFIG)
+	local core, spill, fill, beam = FlashlightOptics.localBeam(emitter, CONFIG)
 
 	-- Optional pre-authored Sound child named "ClickSound" inside this script, or fallback SFX
 	local existingClick = script:FindFirstChild("ClickSound")
@@ -128,7 +131,7 @@ local function createFlashlightEmitter(): (Part, SpotLight, SpotLight, Beam, Sou
 		sfx.Parent = emitter
 	end
 
-	return emitter, core, spill, beam, sfx
+	return emitter, core, spill, fill, beam, sfx
 end
 
 local function ensureTouchButton()
@@ -184,6 +187,9 @@ function FlashlightController.setLights(state: boolean)
 	end
 	if spillLight then
 		spillLight.Enabled = state
+	end
+	if fillLight then
+		fillLight.Enabled = state
 	end
 	if dustBeam then
 		dustBeam.Enabled = state
@@ -254,6 +260,13 @@ function FlashlightController.recharge(amount: number)
 	battery = math.clamp(battery + amount, 0, CONFIG.MAX_BATTERY)
 end
 
+function FlashlightController.drainBattery(amount: number)
+	battery = math.clamp(battery - amount, 0, CONFIG.MAX_BATTERY)
+	if battery <= 0 and isOn then
+		FlashlightController.setFlashlightState(false)
+	end
+end
+
 -- ── Initialisation ──────────────────────────────────────────────────────────
 function FlashlightController.init()
 	Workspace:GetAttributeChangedSignal("ExpeditionNumber"):Connect(function()
@@ -264,10 +277,11 @@ function FlashlightController.init()
 		end
 	end)
 
-	local emitter, core, spill, beam, sfx = createFlashlightEmitter()
+	local emitter, core, spill, fill, beam, sfx = createFlashlightEmitter()
 	emitterPart = emitter
 	coreLight = core
 	spillLight = spill
+	fillLight = fill
 	dustBeam = beam
 	clickSound = sfx
 
@@ -293,7 +307,10 @@ function FlashlightController.init()
 		if remotes then
 			local flickerEv = remotes:WaitForChild("FlickerRequest", 10) :: RemoteEvent?
 			if flickerEv then
-				flickerEv.OnClientEvent:Connect(function(dur: number, intensity: number)
+				flickerEv.OnClientEvent:Connect(function(dur: number, intensity: number, drainAmount: number?)
+					if typeof(drainAmount) == "number" and drainAmount > 0 then
+						FlashlightController.drainBattery(drainAmount)
+					end
 					FlashlightController.triggerFlicker(dur, intensity)
 				end)
 			end
@@ -306,12 +323,26 @@ function FlashlightController.init()
 			local function applyTint()
 				local tintId = player:GetAttribute("FlashlightTint")
 				if tintId == "StandardHalogen" then
-					FlashlightOptics.setTint(coreLight, spillLight, dustBeam, CONFIG.CoreColor, CONFIG.SpillColor)
+					FlashlightOptics.setTint(
+						coreLight,
+						spillLight,
+						fillLight,
+						dustBeam,
+						CONFIG.CoreColor,
+						CONFIG.SpillColor
+					)
 					return
 				end
 				local tint = if typeof(tintId) == "string" then catalog.Tints[tintId] else nil
 				if tint then
-					FlashlightOptics.setTint(coreLight, spillLight, dustBeam, tint.hotspotColor, tint.spillColor)
+					FlashlightOptics.setTint(
+						coreLight,
+						spillLight,
+						fillLight,
+						dustBeam,
+						tint.hotspotColor,
+						tint.spillColor
+					)
 				end
 			end
 			player:GetAttributeChangedSignal("FlashlightTint"):Connect(applyTint)
@@ -380,6 +411,9 @@ function FlashlightController.init()
 			if spillLight then
 				spillLight.Brightness = CONFIG.SpillBrightness * flickerMultiplier
 			end
+			if fillLight then
+				fillLight.Brightness = CONFIG.FillBrightness * flickerMultiplier
+			end
 		end
 	end)
 
@@ -394,6 +428,7 @@ function FlashlightController.destroy()
 		emitterPart = nil
 		coreLight = nil
 		spillLight = nil
+		fillLight = nil
 		dustBeam = nil
 		clickSound = nil
 	end

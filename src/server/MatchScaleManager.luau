@@ -3,9 +3,18 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ExitGate = require(script.Parent.ExitGate)
 local ObjectivePickups = require(script.Parent.ObjectivePickups)
+local TeleportManager = require(script.Parent.TeleportManager)
 
 local MatchScaleManager = {}
 local REPLAY_DELAY = 12
+local activeReviveHandler: ((Player) -> boolean)? = nil
+
+function MatchScaleManager.revivePlayer(target: Player): boolean
+	if activeReviveHandler then
+		return activeReviveHandler(target)
+	end
+	return false
+end
 
 function MatchScaleManager.init(buildRooms: () -> { Model })
 	local remotes = ReplicatedStorage:FindFirstChild("MatchRemotes") :: Folder?
@@ -28,6 +37,7 @@ function MatchScaleManager.init(buildRooms: () -> { Model })
 	end
 	local collect = remote("CollectObjective")
 	local progress = remote("ObjectiveProgress")
+	local claimRevive = remote("ClaimReviveToken")
 	remote("DoorUnlocked")
 	local phase = "Preparing"
 	local members: { [Player]: boolean } = {}
@@ -124,6 +134,63 @@ function MatchScaleManager.init(buildRooms: () -> { Model })
 			finish("Wiped")
 		end
 	end
+
+	local function findReviveDestination(): CFrame?
+		for member in members do
+			if member.Parent == Players and member:GetAttribute("SittingOut") ~= true then
+				local char = member.Character
+				local hrp = char and char:FindFirstChild("HumanoidRootPart")
+				local hum = char and char:FindFirstChildOfClass("Humanoid")
+				if hrp and hrp:IsA("BasePart") and hum and hum.Health > 0 then
+					return hrp.CFrame * CFrame.new(0, 0, 2.5)
+				end
+			end
+		end
+		local first = rooms[1]
+		local entrance = first and first:FindFirstChild("Entrance")
+		if entrance and entrance:IsA("BasePart") then
+			return entrance.CFrame + Vector3.yAxis * 2
+		end
+		return nil
+	end
+
+	local function doRevive(target: Player): boolean
+		if phase ~= "Active" or target.Parent ~= Players or members[target] then
+			return false
+		end
+		local dest = findReviveDestination()
+		if not dest then
+			return false
+		end
+		members[target] = true
+		target:SetAttribute("SittingOut", false)
+		target:SetAttribute("DungeonEntered", true)
+		state:SetAttribute("Survivors", survivors())
+		task.spawn(function()
+			local ok = pcall(function()
+				target:LoadCharacterAsync()
+			end)
+			if ok and target.Parent == Players and phase == "Active" and members[target] then
+				TeleportManager.teleportPlayer(target, dest)
+			end
+		end)
+		return true
+	end
+	activeReviveHandler = doRevive
+
+	claimRevive.OnServerEvent:Connect(function(player: Player)
+		if phase ~= "Active" or members[player] or player:GetAttribute("ReviveTokenClaimed") == true then
+			return
+		end
+		local tokens = player:GetAttribute("ReviveTokens")
+		if typeof(tokens) ~= "number" or tokens < 1 then
+			return
+		end
+		if doRevive(player) then
+			player:SetAttribute("ReviveTokens", tokens - 1)
+			player:SetAttribute("ReviveTokenClaimed", true)
+		end
+	end)
 	local function enter(player: Player)
 		if phase ~= "Forest" or player:GetAttribute("DungeonEntered") ~= true or #rooms == 0 then
 			return

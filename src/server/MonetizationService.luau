@@ -4,6 +4,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local ShopCatalog = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ShopCatalog"))
+local MatchScaleManager = require(script.Parent.MatchScaleManager)
 
 local MonetizationService = {}
 
@@ -30,6 +31,7 @@ function MonetizationService.init()
 
 	local equipTint = ensureRemote("EquipFlashlightTint")
 	local batteryGift = ensureRemote("BatteryGiftReceived")
+	local setGiftTarget = ensureRemote("SetGiftTarget")
 
 	local unlockedTints: { [Player]: { [string]: boolean } } = {}
 	local pendingGiftTarget: { [number]: number } = {}
@@ -65,6 +67,12 @@ function MonetizationService.init()
 		end
 	end)
 
+	setGiftTarget.OnServerEvent:Connect(function(player: Player, targetUserId: unknown)
+		if typeof(targetUserId) == "number" and Players:GetPlayerByUserId(targetUserId) then
+			pendingGiftTarget[player.UserId] = targetUserId
+		end
+	end)
+
 	MarketplaceService.ProcessReceipt = function(receiptInfo)
 		if processedReceipts[receiptInfo.PurchaseId] then
 			return Enum.ProductPurchaseDecision.PurchaseGranted
@@ -93,6 +101,17 @@ function MonetizationService.init()
 				return Enum.ProductPurchaseDecision.NotProcessedYet
 			end
 			batteryGift:FireClient(target, 50)
+			processedReceipts[receiptInfo.PurchaseId] = true
+			return Enum.ProductPurchaseDecision.PurchaseGranted
+		end
+
+		local reviveProduct = ShopCatalog.SupportProducts.GiftFieldRevive
+		if reviveProduct.productId > 0 and receiptInfo.ProductId == reviveProduct.productId then
+			local targetId = pendingGiftTarget[buyer.UserId]
+			local target = if targetId then Players:GetPlayerByUserId(targetId) else nil
+			if not target or not MatchScaleManager.revivePlayer(target) then
+				return Enum.ProductPurchaseDecision.NotProcessedYet
+			end
 			processedReceipts[receiptInfo.PurchaseId] = true
 			return Enum.ProductPurchaseDecision.PurchaseGranted
 		end

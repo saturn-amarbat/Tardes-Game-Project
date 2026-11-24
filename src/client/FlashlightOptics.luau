@@ -10,6 +10,8 @@ export type BeamConfig = {
 	SpillBrightness: number,
 	SpillRange: number,
 	SpillColor: Color3,
+	FillBrightness: number,
+	FillRange: number,
 	BeamLength: number,
 	BeamWidth0: number,
 	BeamWidth1: number,
@@ -44,7 +46,7 @@ local function createSpot(
 	return light
 end
 
-function FlashlightOptics.localBeam(emitter: BasePart, cfg: BeamConfig): (SpotLight, SpotLight, Beam)
+function FlashlightOptics.localBeam(emitter: BasePart, cfg: BeamConfig): (SpotLight, SpotLight, PointLight, Beam)
 	local coreLight =
 		createSpot(emitter, "CoreSpotLight", cfg.CoreAngle, cfg.CoreBrightness, cfg.CoreRange, cfg.CoreColor, true)
 	local spillLight = createSpot(
@@ -56,6 +58,16 @@ function FlashlightOptics.localBeam(emitter: BasePart, cfg: BeamConfig): (SpotLi
 		cfg.SpillColor,
 		false
 	)
+
+	-- Soft close-quarters fill for mobile and low-graphics legibility
+	local fillLight = Instance.new("PointLight")
+	fillLight.Name = "FillPointLight"
+	fillLight.Brightness = cfg.FillBrightness
+	fillLight.Range = cfg.FillRange
+	fillLight.Color = cfg.SpillColor
+	fillLight.Shadows = false
+	fillLight.Enabled = false
+	fillLight.Parent = emitter
 
 	local att0 = Instance.new("Attachment")
 	att0.Name = "BeamOrigin"
@@ -83,7 +95,7 @@ function FlashlightOptics.localBeam(emitter: BasePart, cfg: BeamConfig): (SpotLi
 	dustBeam.Enabled = false
 	dustBeam.Parent = emitter
 
-	return coreLight, spillLight, dustBeam
+	return coreLight, spillLight, fillLight, dustBeam
 end
 
 function FlashlightOptics.replica(parent: BasePart): SpotLight
@@ -101,6 +113,7 @@ end
 function FlashlightOptics.setTint(
 	coreLight: SpotLight?,
 	spillLight: SpotLight?,
+	fillLight: PointLight?,
 	dustBeam: Beam?,
 	coreColor: Color3,
 	spillColor: Color3
@@ -110,6 +123,9 @@ function FlashlightOptics.setTint(
 	end
 	if spillLight then
 		spillLight.Color = spillColor
+	end
+	if fillLight then
+		fillLight.Color = spillColor
 	end
 	if dustBeam then
 		dustBeam.Color = ColorSequence.new(coreColor)

@@ -19,7 +19,7 @@ gui.Parent = playerGui
 -- Top-left objective counter.
 local counterFrame = Instance.new("Frame")
 counterFrame.Name = "CounterFrame"
-counterFrame.Size = UDim2.fromOffset(232, 71)
+counterFrame.Size = UDim2.fromOffset(290, 71)
 counterFrame.Position = UDim2.fromOffset(16, 16)
 counterFrame.BackgroundColor3 = Color3.fromRGB(26, 41, 37)
 counterFrame.BackgroundTransparency = 0.16
@@ -36,7 +36,7 @@ counterLabel.TextXAlignment = Enum.TextXAlignment.Left
 counterLabel.BackgroundTransparency = 1
 counterLabel.TextColor3 = Color3.new(1, 1, 1)
 counterLabel.Font = Enum.Font.GothamMedium
-counterLabel.TextSize = 16
+counterLabel.TextSize = 15
 counterLabel.Text = ""
 counterLabel.Parent = counterFrame
 
@@ -168,12 +168,14 @@ local function init()
 		if not underground or waiting then
 			cluePanel.Visible = false
 		end
+		local scrap = player:GetAttribute("RunScrap")
 		counterLabel.Text = string.format(
-			"Keys %d/%d    Fuses %d/%d",
+			"Keys %d/%d   Fuses %d/%d   Scrap %d",
 			matchRemotes:GetAttribute("Keys") or 0,
 			matchRemotes:GetAttribute("KeysTotal") or 1,
 			matchRemotes:GetAttribute("Fuses") or 0,
-			matchRemotes:GetAttribute("FusesTotal") or 1
+			matchRemotes:GetAttribute("FusesTotal") or 1,
+			if typeof(scrap) == "number" then scrap else 0
 		)
 	end
 	matchRemotes.AttributeChanged:Connect(refreshProgress)
@@ -181,6 +183,7 @@ local function init()
 
 	player:GetAttributeChangedSignal("DungeonEntered"):Connect(refreshProgress)
 	player:GetAttributeChangedSignal("SittingOut"):Connect(refreshProgress)
+	player:GetAttributeChangedSignal("RunScrap"):Connect(refreshProgress)
 
 	if clueEv then
 		clueEv.OnClientEvent:Connect(function(entry: { title: string, body: string })

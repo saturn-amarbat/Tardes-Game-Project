@@ -18,6 +18,7 @@
   Call NPCManager.init(rooms) after RoomGenerator.generate().
 ]]
 
+local PathfindingService = game:GetService("PathfindingService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -181,8 +182,10 @@ local CHASE_SPEED = 20
 local CHASE_DETECT_RANGE = 22
 local STALK_DETECT_RANGE = 36
 local TELEGRAPH_RANGE = 30 -- plays audio warning before chase
+local PROXIMITY_FLICKER_RANGE = 38
+local PATH_RECOMPUTE_INTERVAL = 0.35
 
-local function spawnStalker(room: Model, npcFolder: Folder)
+local function spawnStalker(room: Model, npcFolder: Folder, allRooms: { Model }, flickerRemote: RemoteEvent)
 	local template = getTemplate("MainNPC_Stalker")
 
 	local stalker: Model
@@ -205,13 +208,26 @@ local function spawnStalker(room: Model, npcFolder: Folder)
 	stalker:PivotTo(spawnCF)
 	stalker.Parent = npcFolder
 
+	local humanoid = stalker:FindFirstChildOfClass("Humanoid")
+	-- Keep server physics ownership so clients never freeze or rubber-band the monster
+	for _, desc in stalker:GetDescendants() do
+		if desc:IsA("BasePart") and not desc.Anchored then
+			pcall(function()
+				desc:SetNetworkOwner(nil)
+			end)
+		end
+	end
+
 	local state: StalkerState = "Patrol"
-	local patrolPoints: { CFrame } = {}
-	-- Generate simple patrol loop near spawn.
-	for i = 0, 3 do
-		local angle = (i / 4) * math.pi * 2
-		local offset = Vector3.new(math.cos(angle) * 18, 0, math.sin(angle) * 18)
-		table.insert(patrolPoints, CFrame.new(spawnCF.Position + offset))
+	local patrolPoints: { Vector3 } = {}
+	for _, r in allRooms do
+		if r:GetAttribute("SafeRoom") ~= true then
+			local pt = randomRoomPosition(r, stalker).Position
+			table.insert(patrolPoints, pt)
+		end
+	end
+	if #patrolPoints == 0 then
+		table.insert(patrolPoints, spawnCF.Position)
 	end
 	local patrolIdx = 1
 
@@ -219,6 +235,22 @@ local function spawnStalker(room: Model, npcFolder: Folder)
 	local telegraphSound = sounds and sounds:FindFirstChild("StalkerTelegraph") :: Sound?
 	local telegraphPlayed = false
 	local nextAttack = 0
+	local lastFlicker: { [Player]: number } = {}
+
+	local path = PathfindingService:CreatePath({
+		AgentRadius = 1.6,
+		AgentHeight = 5.5,
+		AgentCanJump = false,
+		WaypointSpacing = 4,
+	})
+	local waypoints: { PathWaypoint } = {}
+	local wpIndex = 2
+	local lastPathTime = 0
+	local computingPath = false
+
+	local losParams = RaycastParams.new()
+	losParams.FilterType = Enum.RaycastFilterType.Exclude
+	losParams.RespectCanCollide = true
 
 	local conn: RBXScriptConnection? = nil
 	conn = RunService.Heartbeat:Connect(function(dt: number)
@@ -234,6 +266,8 @@ local function spawnStalker(room: Model, npcFolder: Folder)
 		local nearestDist = math.huge
 		local nearestEffective = math.huge
 		local nearestPlayer: Player? = nil
+		local now = os.clock()
+
 		for _, player in ipairs(Players:GetPlayers()) do
 			local char = player.Character
 			local hrp = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
@@ -244,29 +278,37 @@ local function spawnStalker(room: Model, npcFolder: Folder)
 				and not player:GetAttribute("InSafeRoom")
 			then
 				local d = (hrp.Position - stalkerPos).Magnitude
-				local lightMult = if player:GetAttribute("FlashlightOn") == true then 1 else 1.75
+				local lightOn = player:GetAttribute("FlashlightOn") == true
+				local lightMult = if lightOn then 1 else 1.75
 				local effective = d * lightMult
 				if effective < nearestEffective then
 					nearestEffective = effective
 					nearestDist = d
 					nearestPlayer = player
 				end
+				-- Subtle proximity flicker warning when monster stalks close to lit players
+				if lightOn and d <= PROXIMITY_FLICKER_RANGE and (now - (lastFlicker[player] or 0)) >= 4.5 then
+					lastFlicker[player] = now
+					flickerRemote:FireClient(player, 0.75, 0.55, 0)
+				end
 			end
 		end
 
 		-- Contact damage sends the Stalker back to patrol and gives survivors time to move.
-		if nearestPlayer and nearestDist < 3 and os.clock() >= nextAttack then
+		if nearestPlayer and nearestDist < 3.4 and now >= nextAttack then
 			local character = nearestPlayer.Character
-			local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-			if humanoid and humanoid.Health > 0 then
-				nextAttack = os.clock() + 6
-				humanoid:TakeDamage(35)
+			local targetHum = character and character:FindFirstChildOfClass("Humanoid")
+			if targetHum and targetHum.Health > 0 then
+				nextAttack = now + 6
+				targetHum:TakeDamage(35)
 				stalker:PivotTo(spawnCF)
 				state = "Patrol"
 				telegraphPlayed = false
+				table.clear(waypoints)
 				return
 			end
 		end
+
 		-- State transitions (effective distance rewards turning off flashlight to hide).
 		if nearestEffective < CHASE_DETECT_RANGE then
 			state = "Chase"
@@ -287,28 +329,80 @@ local function spawnStalker(room: Model, npcFolder: Folder)
 			end
 		end
 
-		-- Movement.
 		local speed = if state == "Chase" then CHASE_SPEED elseif state == "Stalk" then STALK_SPEED else PATROL_SPEED
+		if humanoid then
+			humanoid.WalkSpeed = speed
+		end
 
 		local targetPos: Vector3
 		if state == "Patrol" then
-			local goal = patrolPoints[patrolIdx]
-			targetPos = goal.Position
-			if (stalkerPos - targetPos).Magnitude < 2 then
+			targetPos = patrolPoints[patrolIdx]
+			if (stalkerPos - targetPos).Magnitude < 3.5 then
 				patrolIdx = (patrolIdx % #patrolPoints) + 1
+				targetPos = patrolPoints[patrolIdx]
 			end
 		else
 			local char = nearestPlayer and nearestPlayer.Character
 			local hrp = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
-			targetPos = hrp and hrp.Position or stalkerPos
+			targetPos = if hrp then hrp.Position else stalkerPos
 		end
 
-		local direction = (targetPos - stalkerPos)
-		if direction.Magnitude > 0.1 then
-			local step = direction.Unit * math.min(speed * dt, direction.Magnitude)
-			local newPos = stalkerPos + step
-			local lookAt = CFrame.lookAt(newPos, newPos + direction.Unit)
-			stalker:PivotTo(lookAt)
+		if humanoid then
+			-- Direct MoveTo when clear line-of-sight exists; throttled PathfindingService around walls
+			local exclude: { Instance } = { npcFolder }
+			for _, p in Players:GetPlayers() do
+				if p.Character then
+					table.insert(exclude, p.Character)
+				end
+			end
+			losParams.FilterDescendantsInstances = exclude
+			local rayVec = targetPos - stalkerPos
+			local hasLoS = rayVec.Magnitude < 2 or Workspace:Raycast(stalkerPos, rayVec, losParams) == nil
+
+			if hasLoS then
+				table.clear(waypoints)
+				humanoid:MoveTo(targetPos)
+			else
+				if not computingPath and (now - lastPathTime >= PATH_RECOMPUTE_INTERVAL or #waypoints == 0) then
+					computingPath = true
+					lastPathTime = now
+					local originPos = stalkerPos
+					local destPos = targetPos
+					task.spawn(function()
+						local ok = pcall(function()
+							path:ComputeAsync(originPos, destPos)
+						end)
+						if ok and path.Status == Enum.PathStatus.Success then
+							waypoints = path:GetWaypoints()
+							wpIndex = 2 -- skip waypoint 1 (current starting position)
+						end
+						computingPath = false
+					end)
+				end
+
+				local wp = waypoints[wpIndex]
+				if wp then
+					if (stalkerPos - wp.Position).Magnitude < 3.2 then
+						wpIndex += 1
+						wp = waypoints[wpIndex]
+					end
+					if wp then
+						humanoid:MoveTo(wp.Position)
+					else
+						humanoid:MoveTo(targetPos)
+					end
+				else
+					humanoid:MoveTo(targetPos)
+				end
+			end
+		else
+			-- Fallback movement if a placeholder model lacks a Humanoid
+			local direction = targetPos - stalkerPos
+			if direction.Magnitude > 0.1 then
+				local step = direction.Unit * math.min(speed * dt, direction.Magnitude)
+				local newPos = stalkerPos + step
+				stalker:PivotTo(CFrame.lookAt(newPos, newPos + direction.Unit))
+			end
 		end
 	end)
 end
@@ -351,7 +445,7 @@ function NPCManager.init(rooms: { Model })
 	if stalkerRoom:GetAttribute("SafeRoom") == true and numRooms > 1 then
 		stalkerRoom = rooms[numRooms]
 	end
-	spawnStalker(stalkerRoom, npcFolder :: Folder)
+	spawnStalker(stalkerRoom, npcFolder :: Folder, rooms, flickerRemote)
 
 	print(string.format("[NPCManager] Spawned %d toads, RoomInstanceNPCs, and 1 Stalker.", toadCount))
 end

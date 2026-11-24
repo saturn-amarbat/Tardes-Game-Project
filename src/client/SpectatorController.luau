@@ -23,11 +23,17 @@ local function getSurvivors(): { Player }
 end
 
 function SpectatorController.init()
+	local pg = localPlayer:WaitForChild("PlayerGui")
+	local old = pg:FindFirstChild("SpectatorHUD")
+	if old then
+		old:Destroy()
+	end
+
 	local gui = Instance.new("ScreenGui")
 	gui.Name = "SpectatorHUD"
 	gui.ResetOnSpawn = false
 	gui.Enabled = false
-	gui.Parent = localPlayer:WaitForChild("PlayerGui")
+	gui.Parent = pg
 
 	local bar = Instance.new("Frame")
 	bar.Name = "SpectatorBar"

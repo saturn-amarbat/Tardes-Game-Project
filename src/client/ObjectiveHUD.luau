@@ -3,9 +3,17 @@
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local FlashlightController = require(script.Parent.FlashlightController)
 
 local player = Players.LocalPlayer
 local playerGui = player.PlayerGui
+
+local existingHud = playerGui:FindFirstChild("ObjectiveHUD")
+if existingHud then
+	existingHud:Destroy()
+end
 
 -- ── Build HUD ─────────────────────────────────────────────────────────────────
 local gui = Instance.new("ScreenGui")
@@ -114,15 +122,50 @@ clueClose.Activated:Connect(function()
 	cluePanel.Visible = false
 end)
 
--- Centre flash label for door/exit events.
+-- Slim battery indicator directly below CounterFrame (zero overlap).
+local batteryFrame = Instance.new("Frame")
+batteryFrame.Name = "BatteryFrame"
+batteryFrame.Size = UDim2.fromOffset(290, 18)
+batteryFrame.Position = UDim2.fromOffset(16, 93)
+batteryFrame.BackgroundColor3 = Color3.fromRGB(20, 26, 24)
+batteryFrame.BackgroundTransparency = 0.2
+batteryFrame.Parent = gui
+
+local batteryCorner = Instance.new("UICorner")
+batteryCorner.CornerRadius = UDim.new(0, 4)
+batteryCorner.Parent = batteryFrame
+
+local batteryFill = Instance.new("Frame")
+batteryFill.Name = "Fill"
+batteryFill.Size = UDim2.fromScale(1, 1)
+batteryFill.BackgroundColor3 = Color3.fromRGB(238, 214, 152)
+batteryFill.BorderSizePixel = 0
+batteryFill.Parent = batteryFrame
+
+local batteryFillCorner = Instance.new("UICorner")
+batteryFillCorner.CornerRadius = UDim.new(0, 4)
+batteryFillCorner.Parent = batteryFill
+
+local batteryText = Instance.new("TextLabel")
+batteryText.Size = UDim2.fromScale(1, 1)
+batteryText.BackgroundTransparency = 1
+batteryText.Font = Enum.Font.GothamMedium
+batteryText.TextSize = 11
+batteryText.TextColor3 = Color3.fromRGB(240, 238, 232)
+batteryText.TextStrokeTransparency = 0.5
+batteryText.Text = "Battery 100%"
+batteryText.Parent = batteryFrame
+
+-- Top-centre banner for door/exit events (never overlaps centre CluePanel).
 local flashLabel = Instance.new("TextLabel")
 flashLabel.Name = "FlashLabel"
-flashLabel.Size = UDim2.new(0.6, 0, 0, 60)
-flashLabel.Position = UDim2.fromScale(0.2, 0.4)
+flashLabel.AnchorPoint = Vector2.new(0.5, 0)
+flashLabel.Size = UDim2.new(0.55, 0, 0, 44)
+flashLabel.Position = UDim2.new(0.5, 0, 0, 84)
 flashLabel.BackgroundTransparency = 1
 flashLabel.TextColor3 = Color3.fromRGB(100, 255, 140)
 flashLabel.Font = Enum.Font.GothamBold
-flashLabel.TextSize = 36
+flashLabel.TextSize = 22
 flashLabel.TextStrokeTransparency = 0.3
 flashLabel.Text = ""
 flashLabel.TextTransparency = 1
@@ -157,6 +200,7 @@ local function init()
 		end
 		gui.Enabled = underground or waiting or message ~= ""
 		counterFrame.Visible = underground and not waiting and phase == "Active"
+		batteryFrame.Visible = counterFrame.Visible
 		instruction.Text = if matchRemotes:GetAttribute("ExitOpen")
 			then "Reach the extraction bulkhead"
 			elseif matchRemotes:GetAttribute("ObjectivesComplete") then "Operate the exit levers"
@@ -184,6 +228,23 @@ local function init()
 	player:GetAttributeChangedSignal("DungeonEntered"):Connect(refreshProgress)
 	player:GetAttributeChangedSignal("SittingOut"):Connect(refreshProgress)
 	player:GetAttributeChangedSignal("RunScrap"):Connect(refreshProgress)
+
+	local lastPct = -1
+	RunService.Heartbeat:Connect(function()
+		if not batteryFrame.Visible then
+			return
+		end
+		local pct = math.clamp(math.floor(FlashlightController.getBattery() + 0.5), 0, 100)
+		if pct ~= lastPct then
+			lastPct = pct
+			batteryFill.Size = UDim2.fromScale(pct / 100, 1)
+			batteryFill.BackgroundColor3 = if pct <= 20
+				then Color3.fromRGB(206, 72, 62)
+				elseif pct <= 45 then Color3.fromRGB(224, 168, 76)
+				else Color3.fromRGB(238, 214, 152)
+			batteryText.Text = string.format("Battery %d%%", pct)
+		end
+	end)
 
 	if clueEv then
 		clueEv.OnClientEvent:Connect(function(entry: { title: string, body: string })

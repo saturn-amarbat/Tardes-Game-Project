@@ -87,9 +87,10 @@ local function buildSafeRoomTemplate(): Model
 		return a
 	end
 
-	local ent = anchor("Entrance", Vector3.new(0, 3.5, -12.5), Vector3.new(0, 0, 1))
-	anchor("Exit", Vector3.new(0, 3.5, 12.5), Vector3.new(0, 0, -1))
-	model.PrimaryPart = ent
+	local ent = anchor("Entrance", Vector3.new(0, 3.5, -13), Vector3.new(0, 0, 1))
+	anchor("Exit", Vector3.new(0, 3.5, 13), Vector3.new(0, 0, -1))
+	model.WorldPivot = CFrame.new(0, -0.5, 0)
+	local _ = ent
 	return model
 end
 

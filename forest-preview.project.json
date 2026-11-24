@@ -1,0 +1,44 @@
+{
+  "name": "Blackpine Survey Cottage",
+  "tree": {
+    "$className": "DataModel",
+    "Workspace": {
+      "$className": "Workspace",
+      "$properties": {
+        "StreamingEnabled": true
+      }
+    },
+    "Lighting": {
+      "$className": "Lighting",
+      "$properties": {
+        "ClockTime": 17.6,
+        "Brightness": 1.1,
+        "Ambient": [
+          0.28,
+          0.28,
+          0.3
+        ],
+        "OutdoorAmbient": [
+          0.38,
+          0.39,
+          0.41
+        ]
+      }
+    },
+    "ServerScriptService": {
+      "$className": "ServerScriptService",
+      "ForestCabin": {
+        "$path": "src/server/ForestCabin"
+      }
+    },
+    "StarterPlayer": {
+      "$className": "StarterPlayer",
+      "StarterPlayerScripts": {
+        "$className": "StarterPlayerScripts",
+        "ForestWeather": {
+          "$path": "src/client/ForestWeather.client.luau"
+        }
+      }
+    }
+  }
+}

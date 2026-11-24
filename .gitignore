@@ -1,0 +1,20 @@
+# Rojo build artifacts
+*.rbxl
+*.rbxlx
+
+# Packages
+/Packages
+/ServerPackages
+Packages/
+ServerPackages/
+
+# Wally cache
+.wally/
+
+# OS / Editor files
+.DS_Store
+Thumbs.db
+*.swp
+*.bak
+.idea/
+.vscode/

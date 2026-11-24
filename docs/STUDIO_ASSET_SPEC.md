@@ -1,168 +1,113 @@
 # Roblox Studio Asset Specification
 
-This document defines the exact instance names, hierarchy paths, properties, and contract requirements for assets owned and authored by the **Creative Lead** in Roblox Studio Team Create.
-
-Adherence to these exact paths and property values ensures seamless integration with server and client Luau scripts synchronized via Rojo.
+This document defines the exact instance names, hierarchy paths, property contracts, and lighting rules for assets authored in **Roblox Studio Team Create** (`Project Horror`, latest verified save **version `46`**).
 
 ---
 
-## 1. Procedural Room Templates (`ReplicatedStorage/RoomTemplates`)
+## 1. Lighting & Atmosphere (`Lighting`)
 
-Procedural generation ([src/server/RoomGenerator.luau](file:///c:/Users/sanch/Projects/horror-game/src/server/RoomGenerator.luau)) selects room models from `ReplicatedStorage.RoomTemplates`.
+- **`LightingStyle`**: `Enum.LightingStyle.Realistic` (Unified Lighting equivalent of `Future`).
+- **Base Ambient / Exposure**: `Ambient = Color3.fromRGB(8, 8, 12)`, `OutdoorAmbient = Color3.fromRGB(4, 4, 6)`, `ExposureCompensation = -0.35`, `Atmosphere.Density = 0.3`.
+- **Single-Shadow Rule**: Under `Realistic` lighting, **only** the player's `CoreSpotLight` should have `Shadows = true`. Keep `Shadows = false` on all static room ceiling/lamp/lantern lights to prevent shadow-map flicker and light culling.
 
-### Required Directory Structure
+---
+
+## 2. Procedural Room Templates (`ReplicatedStorage/RoomTemplates`)
+
+[src/server/RoomGenerator.luau](file:///c:/Users/sanch/Projects/horror-game/src/server/RoomGenerator.luau) clones templates from `ReplicatedStorage.RoomTemplates`.
+
+### Current Templates
 ```
 ReplicatedStorage
 └── RoomTemplates (Folder)
-    ├── BunkerAirlock (Model)
-    ├── RustyWoodHallway (Model)
-    └── LShapedCabinStudy (Model)
+    ├── BunkerAirlock        (18 × 12 × 24, straight, Atomic)
+    ├── RustyWoodHallway     (14 × 12 × 32, straight, Atomic)
+    ├── LShapedCabinStudy    (37.5 × 12 × 30, 90° turn, Atomic)
+    ├── FloodedSublevel      (18 × 12 × 28, catwalk + standing water, Atomic)
+    ├── GeneratorSwitchRoom  (24 × 12 × 26, dual diesel generators, Atomic)
+    └── ToadMakerSafeRoom    (Optional authored override; runtime fallback built-in)
 ```
 
-### Model Property Contracts
-- **`ModelStreamingMode`**: Must be set to `Enum.ModelStreamingMode.Atomic`. This ensures all room geometry streams to clients simultaneously.
-- **Anchoring**: Every `BasePart` within the room must have `Anchored = true`.
-
-### Required Anchor BaseParts
-Every room template **must** contain two transparent marker parts named exactly `Entrance` and `Exit`:
-
-| Part Name | Class | Properties | Orientation Contract |
-| :--- | :--- | :--- | :--- |
-| `Entrance` | `Part` | `Transparency = 1`<br>`CanCollide = false`<br>`Anchored = true`<br>`Size = Vector3.new(4, 8, 1)` | Centered in the doorway. **LookVector must point OUTWARD** (away from the room interior, i.e., $-Z$ in model space). |
-| `Exit` | `Part` | `Transparency = 1`<br>`CanCollide = false`<br>`Anchored = true`<br>`Size = Vector3.new(4, 8, 1)` | Centered in the doorway. **LookVector must point OUTWARD** (into the forward corridor, i.e., $+Z$ in straight rooms, rotated $90^\circ$ for L-turns). |
-
-> [!IMPORTANT]
-> The procedural snapping algorithm matches `prevExitCF` to `targetEntranceCF` by rotating $180^\circ$ around the Y-axis. If LookVectors do not point outward, rooms will connect backwards or intersect.
+### Mandatory Contracts
+1. **`ModelStreamingMode`**: Must be `Enum.ModelStreamingMode.Atomic`.
+2. **Flush Bounds & Pivot**:
+   - `PrimaryPart = nil`, `WorldPivot = CFrame.new(0, -0.5, 0)`.
+   - Floor, wall, and ceiling solids must end **flush** at `Entrance` and `Exit` (`Z = ±length/2`). Extending parts past `Entrance`/`Exit` causes `GetPartBoundsInBox` overlap halts in `RoomGenerator`.
+3. **Anchors (`Entrance` & `Exit`)**:
+   - Transparent, non-collidable, anchored `Part`s (`Size = Vector3.new(4, 7, 1)`, centered at `Y = 3.5` when floor top is `0`).
+   - Straight rooms use `Entrance.LookVector = (0, 0, +1)` and `Exit.LookVector = (0, 0, -1)` so `targetEntranceCF = prevExitCF * CFrame.Angles(0, math.pi, 0)` chains smoothly.
+   - Doorways must stay `>= 6` studs wide and `>= 9` studs tall so players and `MainNPC_Stalker` never snag.
+4. **Optional Survey Dressing Attributes**:
+   - Add `SurveyMount` `Attachment` (`4` studs above floor, `-Z` toward walkway) to explicitly position `SurveyGallery` cabinets, or set boolean attribute `SurveyDressing = false` to opt a template out.
+   - Set `SafeRoom = true` on `ToadMakerSafeRoom` templates.
 
 ---
 
-## 2. NPC Character Models (`ReplicatedStorage/NPCModels`)
+## 3. NPC Character Models (`ReplicatedStorage/NPCModels`)
 
-The server-side NPC manager ([src/server/NPCManager.luau](file:///c:/Users/sanch/Projects/horror-game/src/server/NPCManager.luau)) loads models by exact name from `ReplicatedStorage.NPCModels`.
-
-### Required Directory Structure
 ```
 ReplicatedStorage
 └── NPCModels (Folder)
-    ├── ToadPassiveNPC (Model)
-    ├── RoomInstanceNPC (Model)
-    └── MainNPC_Stalker (Model)
+    ├── ToadPassiveNPC    (Sculpted mossy toad, PrimaryPart = HumanoidRootPart, Anchored = true)
+    ├── RoomInstanceNPC   (Gaunt shadow entity, PrimaryPart = HumanoidRootPart, Anchored = true)
+    └── MainNPC_Stalker   (Antlered skull stalker rig with Humanoid)
 ```
 
-### Specification by Entity
-
-#### 1. `ToadPassiveNPC` (Ambient Creature)
-- **Role**: Harmless ambient swamp toad found in wet bunker corners.
-- **Required Properties**:
-  - `PrimaryPart`: Set to `HumanoidRootPart` or main body `Part`.
-  - `Anchored`: `true` (stationary or hopped via script).
-  - Optional: Child `Sound` named `Croak` attached to `PrimaryPart`.
-
-#### 2. `RoomInstanceNPC` (Jumpscare Entity)
-- **Role**: Non-lethal scare entity spawned in specific cabin rooms.
-- **Required Properties**:
-  - `PrimaryPart`: Set to `HumanoidRootPart` or chest `Part`.
-  - `Anchored`: `true`.
-  - Child `BasePart` named `Head` or `Torso` for proximity detection.
-
-#### 3. `MainNPC_Stalker` (Apex Monster)
-- **Role**: Roaming, stalking, and chasing entity.
-- **Required Properties**:
-  - `PrimaryPart`: Must be `HumanoidRootPart`.
-  - `Humanoid`: Standard `Humanoid` instance with `WalkSpeed = 12` (Patrol) to `24` (Chase).
-  - Collision: `CanCollide = true` on `HumanoidRootPart`, `CanTouch = true`.
-  - Sound Hook: An `Attachment` inside `HumanoidRootPart` containing a `Sound` named `Footstep`.
+### `MainNPC_Stalker` Rig Contract
+- Must include a `Humanoid` (`WalkSpeed = 12`, `AutoRotate = true`, `DisplayDistanceType = None`).
+- `PrimaryPart = HumanoidRootPart` (`Anchored = false`, `CanCollide = true`, `Transparency = 1`).
+- All decorative limbs/head/antler parts must be `Anchored = false`, `CanCollide = false`, `Massless = true`, and welded to `HumanoidRootPart` via `WeldConstraint`s so `NPCManager` can enforce `SetNetworkOwner(nil)` and drive smooth `PathfindingService` + `Humanoid:MoveTo` chases.
 
 ---
 
-## 3. Authored Workspace Instances (`Workspace`)
+## 4. Authored Workspace Instances (`Workspace`)
 
-The following instances must exist in `Workspace` for opening progression, prologue events, and exit gates:
-
-### Hierarchy Overview
 ```
 Workspace
-├── ForestCabinOpening (Model)
-│   ├── ForestStart (SpawnLocation)
-│   ├── Wardens Cottage (Model)
-│   │   ├── CellarKey (BasePart + ProximityPrompt)
-│   │   └── CellarHatch (BasePart + ProximityPrompt)
-│   └── Survey Vault (Model)
-│       └── SurveyLift (BasePart + ProximityPrompt)
-├── DeerIntroRig (Model)
-├── BunkerEntrance (BasePart)
-├── BunkerLight (PointLight, optional fallback)
-├── ExitLever_A (BasePart + ProximityPrompt)     [TO BE PLACED]
-├── ExitLever_B (BasePart + ProximityPrompt)     [TO BE PLACED]
-└── ExitDoor (Model / Bulkhead)                  [TO BE PLACED]
+├── ForestCabinOpening (Model — synced from src/server/ForestCabin/Opening.rbxmx)
+│   ├── ForestStart (SpawnLocation at 0, 79.9, -254)
+│   ├── Blackpine Wood (Folder with Survey stake parts)
+│   ├── Wardens Cottage (CellarKey + CellarHatch with Prompt)
+│   └── Survey Vault (SurveyLift with Prompt)
+├── DeerIntroRig (Model at 4.2, 82.0, -221.0 beside Blackpine trail)
+├── BunkerEntrance (BasePart at -6, 88.5, -172.5; optional child PointLight "BunkerLight")
+├── ExitLever_A / ExitLever_B (Optional authored levers; runtime industrial pedestals built if absent)
+└── ExitDoor (Optional authored door with BlastLeaf BasePart; runtime steel bulkhead built if absent)
 ```
 
-### Details & Contracts
+### `DeerIntroRig` Rig Contract
+- `PrimaryPart = HumanoidRootPart` (`Anchored = true`, `CanCollide = false`, `Transparency = 1`).
+- Child parts must be `Anchored = false`, `Massless = true`, welded to `HumanoidRootPart` via `WeldConstraint`s so `PrologueManager`'s `TweenService` bolt moves the entire deer model smoothly.
 
-#### `ForestCabinOpening`
-- Authored opening level containing the Blackpine Forest, cottage, and bunker concourse. Synchronized with `src/server/ForestCabin/Opening.rbxmx`.
-- **`ForestStart`**: `SpawnLocation` where players spawn on game start.
-- **`Wardens Cottage/CellarKey`**: A brass key `BasePart` with child `ProximityPrompt` (`ActionText = "Take Cellar Key"`, `HoldDuration = 0.5`).
-- **`Wardens Cottage/CellarHatch`**: Trapdoor `BasePart` covering the basement drop with child `ProximityPrompt` (`ActionText = "Unlock Hatch"`, `RequiresLineOfSight = false`).
-- **`Survey Vault/SurveyLift`**: Industrial elevator platform `BasePart` with child `ProximityPrompt` (`ActionText = "Descend to Lower Complex"`).
-
-#### `DeerIntroRig` & Guiding Anchor
-- **`DeerIntroRig`**: Deer model positioned along the forest road. Must have `PrimaryPart` assigned. Handled by `PrologueManager.luau`.
-- **`BunkerEntrance`**: Marker `BasePart` indicating the bunker exterior entrance.
-- **`BunkerLight`**: PointLight (`Color = Color3.fromRGB(80, 255, 120)`, `Range = 30`) that activates to guide players forward.
-
-#### Exit Gate Levers (`ExitLever_A` & `ExitLever_B`)
-- Two distinct physical switch/lever `BasePart` instances positioned on either side of the bunker extraction door.
-- Each must contain a child `ProximityPrompt` named `Prompt`:
-  - `ActionText = "Hold Lever"`
-  - `HoldDuration = 3.0`
-  - `RequiresLineOfSight = true`
+### `ExitDoor`, `ExitLever_A` & `ExitLever_B` Contracts
+- If authored in `Workspace`, `ExitLever_A` and `ExitLever_B` must be anchored `BasePart`s with child `ProximityPrompt` named `Prompt` (`RequiresLineOfSight = true`, `MaxActivationDistance = 7`).
+- `ExitDoor` should contain a child `BasePart` named `BlastLeaf` (or be a single `BasePart`), which `ExitGate` tweens upward `7.2` studs on unlock. *(If absent, `ExitGate.luau` constructs a steel bulkhead and twin lever pedestals dynamically at `lastRoom.Exit`.)*
 
 ---
 
-## 4. Audio Hook Specifications (`Workspace/Sounds`)
+## 5. Audio Hook Specifications (`Workspace/Sounds`)
 
-Audio effects triggered by game logic are looked up directly in `Workspace.Sounds`.
-
-### Required Directory Structure
 ```
 Workspace
 └── Sounds (Folder)
-    ├── LeafRustle (Sound)
-    ├── DeerScreech (Sound)
-    ├── ToadCroak (Sound)
-    └── StalkerTelegraph (Sound)
+    ├── LeafRustle        (rbxassetid://9116146300 | Volume = 0.75 | Speed = 1.00)
+    ├── DeerScreech       (rbxassetid://320108415  | Volume = 0.90 | Speed = 0.85)
+    ├── ToadCroak         (rbxassetid://6276863875 | Volume = 0.50 | Speed = 1.05 — cloned per toad 3D)
+    └── StalkerTelegraph  (rbxassetid://9044407584 | Volume = 0.95 | Speed = 0.90)
 ```
 
-### Sound Property Configurations
-
-| Sound Name | Volume | PlaybackSpeed | RollOffMode | MaxDistance | Description |
-| :--- | :---: | :---: | :--- | :---: | :--- |
-| `LeafRustle` | 0.8 | 1.0 | InverseTapered | 40 | Ambient rustle before the deer omen triggers. |
-| `DeerScreech` | 1.0 | 0.9 | Inverse | 80 | Terrifying unnatural screech when the deer snaps its neck. |
-| `ToadCroak` | 0.5 | 1.1 | InverseTapered | 30 | Ambient croaking sound emitted near toads. |
-| `StalkerTelegraph`| 1.0 | 0.85 | LinearSquare | 120 | Distinct audio sting/warning 1.5 seconds before Stalker initiates chase. |
+> [!NOTE]
+> `NPCManager` clones `ToadCroak` onto each spawned `ToadPassiveNPC.PrimaryPart` with `RollOffMode = InverseTapered` (`4–24` studs) rather than playing it globally from `Workspace.Sounds`.
 
 ---
 
-## 5. User Interface Contracts (`StarterGui`)
+## 6. User Interface Contracts (`StarterGui`)
 
-The client HUD expects specific UI instances in `StarterGui`.
-
-### Hierarchy Overview
 ```
 StarterGui
 └── GameHUD (ScreenGui)
-    └── FlashlightButton (ImageButton or TextButton)
+    └── FlashlightButton (TextButton | Pos: 1, -110, 1, -96 | Size: 0, 100, 0, 52)
 ```
 
-### Mobile Flashlight Button Contract
-- **Instance Name**: `FlashlightButton`
-- **Class**: `ImageButton` or `TextButton`
-- **Parent**: `StarterGui.GameHUD`
-- **Properties**:
-  - `Size = UDim2.fromOffset(64, 64)`
-  - `Position = UDim2.new(1, -90, 1, -170)` (lower right quadrant, accessible by right thumb)
-  - `Visible = true`
-  - `Active = true`
-- **Controller Binding**: [src/client/FlashlightController.luau](file:///c:/Users/sanch/Projects/horror-game/src/client/FlashlightController.luau) checks `playerGui:WaitForChild("GameHUD"):FindFirstChild("FlashlightButton")`. If present, it binds touch activations directly to `toggle()`. If absent, a fallback button is automatically created.
+- `FlashlightController` binds `GameHUD.FlashlightButton.Activated` directly; on touch devices when absent, it creates a `FlashlightHUD_Fallback` (`ResetOnSpawn = true`).
+- `ObjectiveHUD`, `PrologueUI`, and `SpectatorHUD` are instantiated cleanly on `PlayerGui` (with prior-instance cleanup on init so overlays never stack).

@@ -1,77 +1,53 @@
 # Milestones & Progress Check-In Plan
 
-This document defines the milestone gates, deliverable owners, and recurring progress check-in cadence for **Tardes** before starting graphic asset upgrades and feature implementation.
+This document tracks milestone gates, completed check-ins, and remaining work for **Tardes**. For the architectural rationale behind completed steps, see [docs/DECISIONS_AND_CHANGELOG.md](file:///c:/Users/sanch/Projects/horror-game/docs/DECISIONS_AND_CHANGELOG.md).
 
 ---
 
 ## Check-In Cadence & 4-Point Gate
 
-A formal **Progress Check-In** runs at each sub-milestone (`Gate 0`, `4A`, `4B`, `5A`, `5B`, `6A`, `6B`) and before any merge into `main`. Every check-in must pass four checks:
-
-1. **Git & Code Hygiene:** Clean branch state, `stylua --check src` and `selene src` pass with `0` errors/warnings, and Team Create place saved to cloud.
-2. **Runtime Console:** `0` script errors in Roblox Studio Output during Play mode.
-3. **Visual Crispness Review:** Viewport captures (`screen_capture`) in Play mode verifying lighting contrast, flashlight beam readability, HUD layout, and asset silhouettes.
-4. **Playability Verification:** Live route test confirming the milestone's end-to-end player flow works without soft-locks.
-
----
-
-## Gate 0: Pre-Implementation Baseline Sync
-
-**Goal:** Unify `main` (`f5a8c1e`), `codex/flashlight-beam` (`47a8fae`), and the `codex/blackpine-opening` WIP edits into one clean starting point before upgrading graphics and systems.
-
-| Owner | Deliverable | Exit Criteria |
-| --- | --- | --- |
-| **Technical Lead** | Commit/finalize `codex/blackpine-opening` and merge both `codex/flashlight-beam` and `codex/blackpine-opening` into `main` | Single unified `main` branch; `stylua` & `selene` pass |
-| **Creative Lead** | Resolve Team Create cloud publish (`PublishService`) and place `Workspace.ExitLever_A`, `Workspace.ExitLever_B`, and `Workspace.ExitDoor` | `ExitGate` no longer logs runtime placeholder warnings |
+Every milestone gate (`Gate 0`, `4A`, `4B`, `5A`, `5B`, `6A`, `6B`) verifies:
+1. **Git & Code Hygiene:** Clean branch state, `stylua --check src` and `selene src` pass (`0` errors/warnings), and Team Create saved to cloud.
+2. **Runtime Console:** `0` script errors in Studio Output during Play mode.
+3. **Visual Crispness Review:** Play-mode review verifying lighting contrast, flashlight aim/readability, HUD layout, and silhouettes.
+4. **Playability Verification:** End-to-end route check confirming no soft-locks or progression blockers.
 
 ---
 
-## Milestone 4: Visual & Audio Crispness (Art, Lighting & Atmosphere)
-
-**Goal:** Replace all remaining graybox primitives and silent audio hooks with authored, horror-grade visuals and spatial sound.
-
-### Check-In 4A — Room Templates & NPC Rigs
-- **Creative Lead:**
-  - Upgrade `ReplicatedStorage/RoomTemplates` (`BunkerAirlock`, `RustyWoodHallway`, `LShapedCabinStudy`) from plain box parts to detailed, `Atomic`-streaming 3D architecture with `Entrance`/`Exit` anchors and optional `SurveyMount` attachments.
-  - Replace single-part graybox models in `ReplicatedStorage/NPCModels` (`ToadPassiveNPC`, `RoomInstanceNPC`, `MainNPC_Stalker`) with rigged, animated models with distinct silhouettes.
-- **Technical Lead:**
-  - Wire animation controllers / state transitions in `NPCManager.luau` to the new rigs and verify `SurveyGallery.luau` mounts cleanly against authored walls.
-
-### Check-In 4B — Lighting, Audio & Lore UI
-- **Creative Lead:**
-  - Populate `Workspace/Sounds` (`LeafRustle`, `DeerScreech`, `ToadCroak`, `StalkerTelegraph`) plus ambient bunker/forest audio.
-  - Review lighting balance across Blackpine Forest, Warden's Cottage, and generated bunker rooms in Play mode.
-- **Technical Lead:**
-  - Tune `FlashlightOptics.luau` + `ForestWeather.client.luau` + Studio `Lighting` together so shadows, fog, and beam hotspot read crisply without crushing dark areas.
-  - Upgrade `ObjectiveHUD.luau` clue display into a tactile field-notebook/scrap reader.
-- **Milestone 4 Exit Gate:** Full solo Playtest capture review with authored rooms, animated NPCs, working spatial audio, and `0` console errors.
+## Gate 0: Pre-Implementation Baseline Sync — COMPLETED (`06a8608`, `80cde45`)
+- Merged `codex/flashlight-beam` (`47a8fae`) and `codex/blackpine-opening` (`e530a0f`) into `main`, deleted obsolete branches, and synced canonical [GAME_SPEC.md](file:///c:/Users/sanch/Projects/horror-game/GAME_SPEC.md).
+- Confirmed `ExitGate` builds dynamic bulkhead/levers at `lastRoom.Exit` when static Studio exit instances are absent.
 
 ---
 
-## Milestone 5: Replayability, Co-op Depth & Monetization
-
-**Goal:** Expand run-to-run variety, social co-op moments, and non-pay-to-win monetization hooks.
-
-### Check-In 5A — Room Variety & Co-op Engagement
-- Add 2–3 new room templates to `ReplicatedStorage/RoomTemplates` (e.g., flooded sub-level, generator room, catwalk).
-- Add distinct entity counter-play behaviors in `NPCManager.luau` and a **Spectator Camera** for eliminated teammates.
-
-### Check-In 5B — Lobby & Ethical Monetization
-- Build pre-run lobby/queue (1–4 players) with difficulty or seeded-run options.
-- Implement cosmetic shop (flashlight skins/beam tints, explorer outfits) and altruistic Developer Products (capped self-revive, gift revive / gift battery to teammate).
-- **Milestone 5 Exit Gate:** 2–4 player co-op playtest covering lobby $\to$ forest $\to$ bunker $\to$ extraction/wipe, spectator mode, and purchase/gift flows.
+## Milestone 4: Visual & Audio Crispness — COMPLETED (`8186199`, `6fd5f9c`, `b505b1e`, `7b2e060`, Team Create `v46`)
+- **Check-In 4A (Templates & Rigs):**
+  - Dressed `BunkerAirlock`, `RustyWoodHallway`, and `LShapedCabinStudy` with non-shadow static lighting and architectural props.
+  - Upgraded `ToadPassiveNPC`, `RoomInstanceNPC`, and `MainNPC_Stalker` (`Humanoid` + welded `Massless` limbs + `SetNetworkOwner(nil)`).
+  - Positioned `DeerIntroRig` beside the Blackpine trail (`4.2, 82.0, -221.0`) with welded `PrimaryPart` and `BunkerEntrance` at the cottage threshold.
+- **Check-In 4B (Lighting, Audio, Flashlight & Clue UI):**
+  - Populated `Workspace/Sounds` (`LeafRustle`, `DeerScreech`, `ToadCroak`, `StalkerTelegraph`) with verified Creator Store audio IDs and converted `ToadCroak` to 3D spatial rolloff per toad.
+  - Reworked `FlashlightController` + `FlashlightOptics` (exponentially damped camera/head-forward emitter, wall-clip raycast, `UserInputService.InputBegan`, dual-cone + mobile `FillPointLight`, 1st-person volumetric `Beam`, `Realistic` lighting single-shadow rule).
+  - Upgraded `ObjectiveHUD` (`CluePanel` field-notebook styling, `BatteryFrame`, `HealthFrame`, red `DamageFlash`, non-overlapping `FlashLabel`).
 
 ---
 
-## Milestone 6: Mobile Optimization, Telemetry & Release Candidate
+## Milestone 5: Replayability, Co-op Depth & Monetization — IN PROGRESS (`a25ec17`, `23b8a80`, `fa845b6`)
+- **Check-In 5A (Room Variety, Safe Room, Interactions & Co-op) — Implemented in Code / Needs 2–4 Player Live Test:**
+  - Added `FloodedSublevel` and `GeneratorSwitchRoom` templates in Studio (`10/10` room placement verified with consecutive turn-direction tracking in `RoomGenerator`).
+  - Added mid-run `ToadMakerSafeRoom` (`SafeRoomService`, `RunScrap`, Battery/Medkit/Revive Token vendor, `InSafeRoom` Stalker immunity).
+  - Centralized `ProximityPromptService` validation via `InteractionRouter`, raycasted `ClueSystem` surface placement, `BlastLeaf` smooth tween + `"Locked — Missing Keys/Fuses"` feedback in `ExitGate`.
+  - Added `SpectatorController` + `MatchScaleManager.revivePlayer` (`ClaimReviveToken` + `GiftFieldRevive`).
+- **Check-In 5B (Lobby & Monetization) — Remaining:**
+  - [ ] Build pre-run lobby/queue (1–4 players) and cosmetic/gifting client Shop UI (`ShopCatalog` tints, Toad Keycharms, target picker for `SetGiftTarget`).
+  - [ ] Populate Creator Dashboard numeric `productId` values in [src/shared/ShopCatalog.luau](file:///c:/Users/sanch/Projects/horror-game/src/shared/ShopCatalog.luau) and add Private Server / Chaos pass support if scoped for v1.
+  - [ ] **Open Polish Item:** Raise the concrete concourse ceiling lip above the cellar stairs inside [src/server/ForestCabin/Opening.rbxmx](file:///c:/Users/sanch/Projects/horror-game/src/server/ForestCabin/Opening.rbxmx) to eliminate the brief 3rd-person camera floor clip seen at `00:44` of `playtest_fixed.mp4`.
+  - [ ] **Exit Gate:** Complete a 2–4 player live co-op test verifying simultaneous `ExitLever_A`/`B`, disconnect hold release, Stalker pathfinding across L-rooms, Deer Omen trigger on the trail, and mid-run revive flow.
 
-**Goal:** Ensure smooth mobile performance, instrument player drop-off funnels, and lock a release candidate.
+---
 
-### Check-In 6A — Mobile & Performance Profiling
-- Profile Blackpine Forest (290 pines), `SurveyGallery`, and `StreamingEnabled` (`Atomic`) on low-graphics / mobile emulation and real phone hardware.
-- Verify `StarterGui/GameHUD/FlashlightButton` and `ProximityPrompt` touch ergonomics.
-
-### Check-In 6B — Funnel Telemetry & Launch Readiness
-- Wire the 9 progression funnel events (`funnel_forest_spawn` through `funnel_gate_escaped` / `funnel_squad_wipe`).
-- Complete full regression pass, tag release candidate, and verify rollback steps.
-- **Milestone 6 Exit Gate:** Owner sign-off on performance, funnel telemetry, and public release readiness.
+## Milestone 6: Mobile Optimization, Telemetry & Release Candidate — FOUNDATIONS LANDED (`a25ec17`)
+- **Check-In 6B Telemetry Ready:** `FunnelAnalytics.luau` passively logs all 9 `CoreExpedition` funnel stages (`forest_spawn` through `gate_escaped`/`squad_wipe`).
+- **Remaining:**
+  - [ ] **Check-In 6A:** Profile Blackpine Forest (290 pines), `SurveyGallery`, and `StreamingEnabled` (`Atomic`) on real low-end mobile devices and verify touch prompt/button ergonomics.
+  - [ ] **Check-In 6B:** Verify live Creator Dashboard funnel data, complete final regression pass, and tag v1 release candidate.

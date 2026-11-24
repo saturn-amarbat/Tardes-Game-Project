@@ -1,0 +1,71 @@
+# Architectural Decisions & Engineering Changelog
+
+This document records the major implementation steps completed on **Tardes**, the bugs or constraints observed during development and playtesting, and **why** each architectural decision was made.
+
+Current verified baseline: **`main` at `fa845b6`** (Roblox Studio Team Create **version `46`**).
+
+---
+
+## Decision Records (ADRs)
+
+### ADR-01: Partially Managed Rojo + Team Create Ownership Split
+- **Decision:** Keep `"$ignoreUnknownInstances": true` on `Workspace`, `ReplicatedStorage`, `Lighting`, and `StarterGui` in [default.project.json](file:///c:/Users/sanch/Projects/horror-game/default.project.json), enforce all `.luau` edits on disk in `src/` (`--!strict`, `stylua`, `selene`), and disable Studio Collaborative Editing / Drafts.
+- **Why:** In a two-role workflow (Technical Lead in Git/Rojo, Creative Lead in Studio), unmanaged Rojo deletes builder-authored 3D rooms, lighting, and UI, while editing scripts inside Studio via MCP creates untracked drift and duplicate instances. Keeping scripts exclusively in `src/` ensures clean Git diffs and linting gates.
+
+### ADR-02: Streaming Safety (`Atomic` Models + `RequestStreamAroundAsync`)
+- **Decision:** Set `ModelStreamingMode = Enum.ModelStreamingMode.Atomic` on every room template in `ReplicatedStorage/RoomTemplates` and require `TeleportManager.teleportPlayer` to call `Player:RequestStreamAroundAsync()` and re-validate character/floor existence before `Character:PivotTo()`.
+- **Why:** With `StreamingEnabled = true`, moving a player from the `SurveyLift` in the opening bunker (`Opening.rbxmx`) or reviving a fallen teammate into the generated dungeon risks dropping them through unloaded floor parts. `Atomic` streaming ensures all parts of a room arrive together, and `RequestStreamAroundAsync` blocks safely until destination geometry exists on the client.
+
+### ADR-03: Flush Room Anchor Bounds & Consecutive Turn-Direction Tracking
+- **Decision:**
+  1. Standardize every template in `ReplicatedStorage/RoomTemplates` (`BunkerAirlock`, `RustyWoodHallway`, `LShapedCabinStudy`, `FloodedSublevel`, `GeneratorSwitchRoom`, `ToadMakerSafeRoom`) so floor/wall geometry sits **flush** with `Entrance`/`Exit` anchors (`PrimaryPart = nil`, `WorldPivot = CFrame.new(0, -0.5, 0)`).
+  2. Track `getRoomTurnSign(entrance, exit)` in [src/server/RoomGenerator.luau](file:///c:/Users/sanch/Projects/horror-game/src/server/RoomGenerator.luau) and disallow two consecutive turns in the same direction when alternative templates remain.
+- **Why:** During playtesting, a `0.5`-stud floor overhang past `Entrance`/`Exit` on `FloodedSublevel` and `GeneratorSwitchRoom` triggered `GetPartBoundsInBox` overlap false-positives (`RoomGenerator: cannot place room 3 without overlap – halting early`, halting at `2/10` rooms). Making anchors flush and preventing back-to-back left/right U-turns guarantees reliable `10/10` room chains without self-intersecting loops.
+
+### ADR-04: Centralized Server Interactions via `ProximityPromptService`
+- **Decision:** Introduce [src/server/InteractionRouter.luau](file:///c:/Users/sanch/Projects/horror-game/src/server/InteractionRouter.luau) using `ProximityPromptService` (`PromptTriggered`, `PromptButtonHoldBegan`, `PromptButtonHoldEnded`, `TriggerEnded`) and migrate `ObjectivePickups`, `ClueSystem`, and `ExitGate` onto it. Mount prompts on `PromptMount` `Attachment`s with `RequiresLineOfSight = true`, `MaxActivationDistance = 7`, immediate `Collected = true` locks, and server distance validation (`<= MaxActivationDistance + 4`).
+- **Why:** Relying on client-sent strings (`CollectObjective`) or scattered per-part `.Triggered` listeners risked race conditions, duplicate pickups, grabbing keys through walls, and stale lever holds when a player died or disconnected. Centralizing validation in `InteractionRouter` guarantees one authoritative gatekeeper and automatic `PlayerRemoving` / `Humanoid.Died` hold cleanup.
+
+### ADR-05: Mid-Run `ToadMakerSafeRoom` & Run Scrap Economy
+- **Decision:** Reserve the midpoint room (`ceil(numRooms / 2)`, Room `5` of `10`) for `ToadMakerSafeRoom` (`SafeRoom = true`, `SurveyDressing = false`) via [src/server/RoomGenerator.luau](file:///c:/Users/sanch/Projects/horror-game/src/server/RoomGenerator.luau) and [src/server/SafeRoomService.luau](file:///c:/Users/sanch/Projects/horror-game/src/server/SafeRoomService.luau). Ground booth props via downward floor raycast (`floorY`), exclude `SafeRoom` from hazard NPCs/clues/objectives, grant `InSafeRoom` Stalker immunity, and reward exploration (`+10` Scrap per clue, `+15` per key/fuse) to spend on Emergency Cells, Medkits, or 1 Revive Token per run.
+- **Why:** Per [GAME_SPEC.md](file:///c:/Users/sanch/Projects/horror-game/GAME_SPEC.md), long runs need a mid-run breather that rewards clue hunting and offsets `RoomInstanceNPC` battery drain. Grounding booth geometry against `floorY` fixed an issue spotted in `playtest_fixed.mp4` where offsetting from `Model:GetPivot()` (`Y = -0.5`) buried the counter and keeper half below floor level.
+
+### ADR-06: Detached Flashlight Rework, 3rd-Person Aim Origin & `Realistic` Lighting Rules
+- **Decision:**
+  1. Rework [src/client/FlashlightController.luau](file:///c:/Users/sanch/Projects/horror-game/src/client/FlashlightController.luau) and [src/client/FlashlightOptics.luau](file:///c:/Users/sanch/Projects/horror-game/src/client/FlashlightOptics.luau) to drive a detached `FlashlightEmitter` inside `Workspace.CurrentCamera` using frame-rate-independent exponential damping (`1 - math.exp(-LagStiffness * dt)`), layered idle/walk sway, dual-cone `SpotLight`s + mobile `FillPointLight`, and `UserInputService.InputBegan` (`Shift`-lock safe).
+  2. In 3rd-person (`camDist >= 2.4` studs), originate the emitter `1.45` studs ahead of `Head` (with a wall-clip `Workspace:Raycast` guard) and disable the volumetric `Beam`, reserving `VolumetricDustBeam` (`0.965 -> 1` transparency) for 1st-person zoom.
+  3. Keep `Shadows = true` **only** on `CoreSpotLight` and set `Shadows = false` on `SpillSpotLight`, `FillPointLight`, and all static room/lamp lights under `Enum.LightingStyle.Realistic` (`Ambient = (8, 8, 12)`, `OutdoorAmbient = (4, 4, 6)`, `ExposureCompensation = -0.35`).
+- **Why:** Playtest footage (`playtest_fixed.mp4`) showed two severe visual bugs from a purely camera-mounted emitter: in 3rd-person the player's own hair/head blocked `CoreSpotLight` (`Shadows = true`) to cast giant starburst shadows across the floor, and the untextured `Beam` rendered as a flat white triangle cutting through the player's torso. Meanwhile, moving multiple shadow-casting lights in `Realistic`/Future lighting causes shadow-map flicker, and wall clipping traps the cone inside walls.
+
+### ADR-07: Monster AI Stability, Flashlight Stealth & Spatial Audio
+- **Decision:**
+  1. Equip `ReplicatedStorage/NPCModels/MainNPC_Stalker` with a `Humanoid` + welded `Massless` limbs, enforce `SetNetworkOwner(nil)` on all unanchored parts, and navigate in [src/server/NPCManager.luau](file:///c:/Users/sanch/Projects/horror-game/src/server/NPCManager.luau) via `Workspace:Raycast` line-of-sight checks + throttled `PathfindingService:CreatePath` (`0.35s` interval, skipping waypoint `1`) across hazard room pivots.
+  2. Track `FlashlightOn` on the server ([src/server/FlashlightReplicator.luau](file:///c:/Users/sanch/Projects/horror-game/src/server/FlashlightReplicator.luau)), apply a `1.75x` distance stealth bonus when a player's flashlight is off, trigger proximity flicker within `38` studs, and drain `12%` battery on `RoomInstanceNPC` scares.
+  3. Clone `ToadCroak` onto each toad's `PrimaryPart` with 3D spatial rolloff (`4–24` studs) gated to nearby `DungeonEntered` players, and add a `HealthFrame` + red `DamageFlash` vignette in [src/client/ObjectiveHUD.luau](file:///c:/Users/sanch/Projects/horror-game/src/client/ObjectiveHUD.luau).
+- **Why:** Earlier `PivotTo` movement walked straight through walls and risked client network-ownership stuttering, while playing `Workspace.Sounds.ToadCroak:Play()` globally caused a toad croak to spam across the entire forest and cottage every ~`1.5s`.
+
+### ADR-08: Objective-Gated `ExitGate`, Mid-Run Revives, Spectator Mode & Analytics
+- **Decision:**
+  - Build a fallback steel `ExitDoor` bulkhead (`BlastLeaf` tweened upward `7.2` studs on unlock, `EscapePrompt` kept on the static `Exit` anchor) + industrial `ExitLever_A`/`ExitLever_B` pedestals in [src/server/ExitGate.luau](file:///c:/Users/sanch/Projects/horror-game/src/server/ExitGate.luau), showing `"Locked — Missing Keys/Fuses"` feedback before `arm()`.
+  - Implement [src/client/SpectatorController.luau](file:///c:/Users/sanch/Projects/horror-game/src/client/SpectatorController.luau) + `MatchScaleManager.revivePlayer` for 1 earned Revive Token per run and Robux `GiftFieldRevive` receipts ([src/server/MonetizationService.luau](file:///c:/Users/sanch/Projects/horror-game/src/server/MonetizationService.luau), [src/shared/ShopCatalog.luau](file:///c:/Users/sanch/Projects/horror-game/src/shared/ShopCatalog.luau)).
+  - Instrument all 9 progression stages via [src/server/FunnelAnalytics.luau](file:///c:/Users/sanch/Projects/horror-game/src/server/FunnelAnalytics.luau).
+- **Why:** Eliminated teammates previously had no camera feedback, `ExitGate` previously rendered glowing floating blocks without a physical door, and launch readiness requires non-pay-to-win cosmetic/social monetization plus measurable player drop-off telemetry.
+
+---
+
+## Chronological Implementation History
+
+| Commit | Phase | Summary |
+| :--- | :--- | :--- |
+| `024c3ed` | Knowledge Base | Established initial `README.md` and `docs/` architecture/asset specs. |
+| `48aae19` | Milestone 3 & Survey Works | Completed server-validated `ObjectivePickups`, `ExitGate`, replay loop (`MatchScaleManager`), and `SurveyGallery`/`SurveyInstruments`. |
+| `9c146db` / `f5a8c1e` | Cottage Reveal & Bay | Added `CottageHardware`, `SurveyRelay`, `ObjectiveProps` (key/fuse silhouettes), and `MaintenanceBay`. |
+| `06a8608` | Gate 0 Baseline Sync | Unified `codex/flashlight-beam` (`FlashlightOptics`) and `codex/blackpine-opening` (`TrailMarkers`, `ForestWeather`, `PrologueController`), and set up `MILESTONES_AND_CHECKINS.md`. |
+| `8186199` | Milestone 4 | Upgraded `ObjectiveHUD` clue reader (`CluePanel`), sculpted Studio `RoomTemplates`/`NPCModels`, and wired `Workspace/Sounds` Creator Store IDs. |
+| `a25ec17` | Milestone 5/6 Foundations | Added `FloodedSublevel` + `GeneratorSwitchRoom` templates, Stalker light stealth, `SpectatorController`, `FunnelAnalytics`, `ShopCatalog`, and `MonetizationService`. |
+| `6fd5f9c` | Flashlight Rework | Reworked `FlashlightController` & `FlashlightOptics` with damped camera tracking, layered sway, dual-cone + volumetric beam, and `ClickSound` speed randomization. |
+| `80cde45` | Spec Sync | Tracked canonical [GAME_SPEC.md](file:///c:/Users/sanch/Projects/horror-game/GAME_SPEC.md) and linked it from `AGENTS.md` and `README.md`. |
+| `23b8a80` | `GAME_SPEC` Alignment | Added mid-run `ToadMakerSafeRoom` (`SafeRoomService`), `RunScrap` economy, earned `ReviveTokens` + `ClaimReviveToken`, `FillPointLight`, and `RoomInstanceNPC` battery drain. |
+| `b505b1e` | Studio & AI Bugfix Pass | Cleaned duplicate `SafeRoomService`/stale `ClientFlashlightRig`, made room bounds flush (`10/10` rooms), disabled static light shadows, moved `ObjectiveHUD.FlashLabel` + added `BatteryFrame`, and added `PathfindingService` + `SetNetworkOwner(nil)` to `MainNPC_Stalker`. |
+| `7b2e060` | Playtest Review Fixes | Fixed `ToadCroak` spatial rolloff, 3rd-person flashlight starburst/triangle artifact, `SafeRoomService` floor raycast grounding, `HealthFrame` + `DamageFlash`, and `ExitGate` steel bulkhead/levers. |
+| `fa845b6` | M3 Interactions & Layout | Added `InteractionRouter` (`ProximityPromptService`), `RoomGenerator` turn-direction banning, `ClueSystem` surface raycasts + `PromptMount` `Attachment`s, `ExitGate` locked feedback + `BlastLeaf` tween, and positioned `DeerIntroRig` on the Blackpine trail (`Team Create v46`). |

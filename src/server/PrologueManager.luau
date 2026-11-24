@@ -28,29 +28,36 @@ local PrologueManager = {}
 -- ── Remotes ─────────────────────────────────────────────────────────────────
 local function ensureRemote(parent: Instance, name: string): RemoteEvent
 	local ev = parent:FindFirstChild(name) :: RemoteEvent?
-	if not ev then
-		ev = Instance.new("RemoteEvent")
-		ev.Name = name
-		ev.Parent = parent
+	if ev then
+		return ev
 	end
-	return ev :: RemoteEvent
+	local created = Instance.new("RemoteEvent")
+	created.Name = name
+	created.Parent = parent
+	return created
 end
 
 local function ensureFolder(parent: Instance, name: string): Folder
 	local f = parent:FindFirstChild(name) :: Folder?
-	if not f then
-		f = Instance.new("Folder")
-		f.Name = name
-		f.Parent = parent
+	if f then
+		return f
 	end
-	return f :: Folder
+	local created = Instance.new("Folder")
+	created.Name = name
+	created.Parent = parent
+	return created
 end
 
 -- ── Deer sequence ────────────────────────────────────────────────────────────
 local omenTriggered = false
+local sequenceId = 0
 
 local function activateBunkerLight()
 	local bunkerLight = Workspace:FindFirstChild("BunkerLight") :: PointLight?
+	if not bunkerLight then
+		local anchor = Workspace:FindFirstChild("BunkerEntrance")
+		bunkerLight = if anchor then anchor:FindFirstChildOfClass("PointLight") else nil
+	end
 	if bunkerLight then
 		bunkerLight.Enabled = true
 		return
@@ -69,7 +76,7 @@ local function activateBunkerLight()
 	light.Parent = anchor
 end
 
-local function runDeerSequence(_remotes: Folder, dialogueEvent: RemoteEvent)
+local function runDeerSequence(token: number, dialogueEvent: RemoteEvent)
 	-- a. Leaf-rustle SFX hook.
 	local sounds = Workspace:FindFirstChild("Sounds")
 	local leafRustle = sounds and sounds:FindFirstChild("LeafRustle") :: Sound?
@@ -77,10 +84,16 @@ local function runDeerSequence(_remotes: Folder, dialogueEvent: RemoteEvent)
 		leafRustle:Play()
 	end
 	task.wait(1.2)
+	if token ~= sequenceId then
+		return
+	end
 
 	-- b. Dialogue broadcast.
 	dialogueEvent:FireAllClients("Scared me for a second… just a deer.")
 	task.wait(3)
+	if token ~= sequenceId then
+		return
+	end
 
 	-- c. Snap deer 180° + screeech SFX.
 	local deerRig = Workspace:FindFirstChild("DeerIntroRig") :: Model?
@@ -93,6 +106,9 @@ local function runDeerSequence(_remotes: Folder, dialogueEvent: RemoteEvent)
 		screech:Play()
 	end
 	task.wait(0.4)
+	if token ~= sequenceId then
+		return
+	end
 
 	-- d. Bolt the deer away (tween position +Z 80 studs, fade model out).
 	if deerRig and deerRig.PrimaryPart then
@@ -102,9 +118,15 @@ local function runDeerSequence(_remotes: Folder, dialogueEvent: RemoteEvent)
 		local tween = TweenService:Create(deerRig.PrimaryPart, info, { CFrame = endPos })
 		tween:Play()
 		tween.Completed:Wait()
+		if token ~= sequenceId then
+			return
+		end
 		deerRig.Parent = nil -- remove from workspace
 	end
 	task.wait(0.3)
+	if token ~= sequenceId then
+		return
+	end
 
 	-- e. Activate guiding bunker light.
 	activateBunkerLight()
@@ -123,6 +145,9 @@ function PrologueManager.init()
 	local skipVotes: { [Player]: boolean } = {}
 
 	skipEvent.OnServerEvent:Connect(function(player: Player)
+		if player:GetAttribute("DungeonEntered") or player:GetAttribute("SittingOut") then
+			return
+		end
 		skipVotes[player] = true
 		local total = #Players:GetPlayers()
 		local votes = 0
@@ -143,13 +168,24 @@ function PrologueManager.init()
 
 	-- Proximity poll: check every 0.5 s whether a player or flashlight is near
 	-- the DeerIntroRig anchor. This avoids per-frame cost.
-	local proximityConn: RBXScriptConnection? = nil
-	proximityConn = RunService.Heartbeat:Connect(function()
+	local deer = Workspace:FindFirstChild("DeerIntroRig") :: Model?
+	local home = if deer then deer:GetPivot() else nil
+	Workspace:GetAttributeChangedSignal("ExpeditionNumber"):Connect(function()
+		sequenceId += 1
+		omenTriggered = false
+		table.clear(skipVotes)
+		if deer and home then
+			deer:PivotTo(home)
+			deer.Parent = Workspace
+		end
+		local anchor = Workspace:FindFirstChild("BunkerEntrance")
+		local light = Workspace:FindFirstChild("BunkerLight") or (anchor and anchor:FindFirstChild("BunkerLight"))
+		if light and light:IsA("PointLight") then
+			light.Enabled = false
+		end
+	end)
+	RunService.Heartbeat:Connect(function()
 		if omenTriggered then
-			if proximityConn then
-				proximityConn:Disconnect()
-				proximityConn = nil
-			end
 			return
 		end
 
@@ -164,11 +200,7 @@ function PrologueManager.init()
 			local hrp = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
 			if hrp and (hrp.Position - deerPos).Magnitude < TRIGGER_RADIUS then
 				omenTriggered = true
-				if proximityConn then
-					proximityConn:Disconnect()
-					proximityConn = nil
-				end
-				task.spawn(runDeerSequence, prologueFolder, dialogueEvent)
+				task.spawn(runDeerSequence, sequenceId, dialogueEvent)
 				break
 			end
 		end

@@ -84,14 +84,24 @@ local function init()
 		return
 	end
 
-	local _gui, label, skipBtn = buildDialogueUI()
-
-	-- Show initial guidance text with a brief fade-in delay.
-	task.delay(2, function()
-		setDialogueText(label, "Find shelter before nightfall.")
-	end)
-
+	local gui, label, skipBtn = buildDialogueUI()
+	local function refresh()
+		gui.Enabled = player:GetAttribute("DungeonEntered") ~= true and player:GetAttribute("SittingOut") ~= true
+		if gui.Enabled then
+			setDialogueText(label, "Find shelter before nightfall.")
+			skipBtn.Active = true
+			skipBtn.Text = "Skip intro  ▶"
+		else
+			label.Text = ""
+		end
+	end
+	player:GetAttributeChangedSignal("DungeonEntered"):Connect(refresh)
+	player:GetAttributeChangedSignal("SittingOut"):Connect(refresh)
+	refresh()
 	dialogueEvent.OnClientEvent:Connect(function(text: string)
+		if not gui.Enabled then
+			return
+		end
 		setDialogueText(label, text)
 	end)
 

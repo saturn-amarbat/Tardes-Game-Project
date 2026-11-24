@@ -1,253 +1,202 @@
 --!strict
---[[
-  MatchScaleManager  –  SERVER-SIDE
-
-  Scales objectives by live player count at round start:
-
-  1 player:  compact run  – 1 key + 1 fuse, single-switch exit lever.
-  2–4 players: expanded   – (count) keys + fuses, dual-lever doors that
-                            require 2 living players holding switches
-                            simultaneously; auto-reverts to single-lever
-                            if only 1 survivor remains.
-
-  Creates ProximityPrompts on lever Parts named "ExitLever_A" / "ExitLever_B"
-  in Workspace.  Creative Lead places the actual geometry; this module just
-  wires the interaction logic.
-
-  Fires DoorUnlocked remote → client plays door-open SFX/anim.
-]]
-
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local RunService = game:GetService("RunService")
-local Workspace = game:GetService("Workspace")
+local ExitGate = require(script.Parent.ExitGate)
+local ObjectivePickups = require(script.Parent.ObjectivePickups)
 
 local MatchScaleManager = {}
+local REPLAY_DELAY = 12
 
--- ── Types ────────────────────────────────────────────────────────────────────
-type ObjectiveSet = {
-	keys: number,
-	fuses: number,
-	dualLever: boolean,
-}
-
--- ── Helpers ───────────────────────────────────────────────────────────────────
-local function ensureRemote(parent: Instance, name: string): RemoteEvent
-	local ev = parent:FindFirstChild(name) :: RemoteEvent?
-	if not ev then
-		ev = Instance.new("RemoteEvent")
-		ev.Name = name
-		ev.Parent = parent
+function MatchScaleManager.init(buildRooms: () -> { Model })
+	local remotes = ReplicatedStorage:FindFirstChild("MatchRemotes") :: Folder?
+	if not remotes then
+		local folder = Instance.new("Folder")
+		folder.Name = "MatchRemotes"
+		folder.Parent = ReplicatedStorage
+		remotes = folder
 	end
-	return ev :: RemoteEvent
-end
-
-local function ensureFolder(parent: Instance, name: string): Folder
-	local f = parent:FindFirstChild(name) :: Folder?
-	if not f then
-		f = Instance.new("Folder")
-		f.Name = name
-		f.Parent = parent
-	end
-	return f :: Folder
-end
-
-local function activePlayers(): number
-	return #Players:GetPlayers()
-end
-
-local function computeObjectives(count: number): ObjectiveSet
-	if count <= 1 then
-		return { keys = 1, fuses = 1, dualLever = false }
-	else
-		return { keys = count, fuses = count, dualLever = true }
-	end
-end
-
--- ── Lever logic ──────────────────────────────────────────────────────────────
-local function setupSingleLever(remotes: Folder)
-	local doorEvent = ensureRemote(remotes, "DoorUnlocked")
-
-	local leverA = Workspace:FindFirstChild("ExitLever_A") :: BasePart?
-	if not leverA then
-		warn("[MatchScaleManager] ExitLever_A not found in Workspace (Creative Lead places it).")
-		return
-	end
-
-	local prompt = Instance.new("ProximityPrompt")
-	prompt.ActionText = "Pull Lever"
-	prompt.HoldDuration = 1.5
-	prompt.MaxActivationDistance = 5
-	prompt.Parent = leverA
-
-	prompt.Triggered:Connect(function(_player: Player)
-		prompt.Enabled = false
-		doorEvent:FireAllClients("ExitDoor")
-	end)
-end
-
-local function setupDualLever(remotes: Folder)
-	local doorEvent = ensureRemote(remotes, "DoorUnlocked")
-
-	local leverA = Workspace:FindFirstChild("ExitLever_A") :: BasePart?
-	local leverB = Workspace:FindFirstChild("ExitLever_B") :: BasePart?
-	if not leverA or not leverB then
-		warn("[MatchScaleManager] ExitLever_A or ExitLever_B missing – falling back to single lever.")
-		setupSingleLever(remotes)
-		return
-	end
-
-	local heldA = false
-	local heldB = false
-	local unlocked = false
-
-	local function checkUnlock()
-		if heldA and heldB and not unlocked then
-			unlocked = true
-			doorEvent:FireAllClients("ExitDoor")
+	local state = remotes :: Folder
+	local function remote(name: string): RemoteEvent
+		local existing = state:FindFirstChild(name)
+		if existing then
+			return existing :: RemoteEvent
 		end
+		local event = Instance.new("RemoteEvent")
+		event.Name = name
+		event.Parent = state
+		return event
 	end
-
-	local function revertToSingleIfNeeded()
-		-- Auto-revert: if only 1 player left, allow single lever to open.
-		if activePlayers() <= 1 and not unlocked then
-			unlocked = true
-			doorEvent:FireAllClients("ExitDoor")
+	local collect = remote("CollectObjective")
+	local progress = remote("ObjectiveProgress")
+	remote("DoorUnlocked")
+	local phase = "Preparing"
+	local members: { [Player]: boolean } = {}
+	local rooms: { Model } = {}
+	local gate: { arm: () -> (), close: () -> (), destroy: () -> () }? = nil
+	local claims: RBXScriptConnection? = nil
+	local round = 0
+	local keys, fuses, keyTotal, fuseTotal = 0, 0, 1, 1
+	local function setPhase(new: string)
+		phase = new
+		state:SetAttribute("RunState", new)
+	end
+	local function publish()
+		state:SetAttribute("Keys", keys)
+		state:SetAttribute("Fuses", fuses)
+		state:SetAttribute("KeysTotal", keyTotal)
+		state:SetAttribute("FusesTotal", fuseTotal)
+		progress:FireAllClients({ keys = keys, fuses = fuses, keysTotal = keyTotal, fusesTotal = fuseTotal })
+	end
+	local function scale(count: number)
+		keyTotal = math.clamp(count, 1, 4)
+		fuseTotal = math.ceil((keyTotal + 1) / 2)
+		publish()
+	end
+	local function survivors(): number
+		local n = 0
+		for _ in members do
+			n += 1
 		end
+		return n
 	end
-
-	-- Prompt A
-	local promptA = Instance.new("ProximityPrompt")
-	promptA.ActionText = "Hold Lever A"
-	promptA.HoldDuration = 0
-	promptA.MaxActivationDistance = 5
-	promptA.Parent = leverA
-
-	-- Prompt B
-	local promptB = Instance.new("ProximityPrompt")
-	promptB.ActionText = "Hold Lever B"
-	promptB.HoldDuration = 0
-	promptB.MaxActivationDistance = 5
-	promptB.Parent = leverB
-
-	promptA.PromptButtonHoldBegan:Connect(function(_player: Player)
-		heldA = true
-		checkUnlock()
-	end)
-	promptA.PromptButtonHoldEnded:Connect(function(_player: Player)
-		heldA = false
-	end)
-	promptB.PromptButtonHoldBegan:Connect(function(_player: Player)
-		heldB = true
-		checkUnlock()
-	end)
-	promptB.PromptButtonHoldEnded:Connect(function(_player: Player)
-		heldB = false
-	end)
-
-	Players.PlayerRemoving:Connect(function(_p: Player)
-		revertToSingleIfNeeded()
-	end)
-
-	-- Poll in heartbeat: if only 1 player left at any time, revert.
-	local conn: RBXScriptConnection? = nil
-	conn = RunService.Heartbeat:Connect(function()
-		if unlocked then
-			if conn then
-				conn:Disconnect()
+	local function eligible(player: Player): boolean
+		return phase == "Active" and members[player] == true and player:GetAttribute("DungeonEntered") == true
+	end
+	local function reset()
+		setPhase("Preparing")
+		if gate then
+			gate.destroy()
+			gate = nil
+		end
+		if claims then
+			claims:Disconnect()
+			claims = nil
+		end
+		table.clear(members)
+		round += 1
+		keys, fuses = 0, 0
+		state:SetAttribute("Survivors", 0)
+		state:SetAttribute("ExitOpen", false)
+		state:SetAttribute("ObjectivesComplete", false)
+		workspace:SetAttribute("ExpeditionNumber", round)
+		for _, p in Players:GetPlayers() do
+			p:SetAttribute("DungeonEntered", false)
+			p:SetAttribute("SittingOut", false)
+		end
+		rooms = buildRooms()
+		scale(#Players:GetPlayers())
+		if round > 1 then
+			-- Wait for all old characters to be replaced before admitting a new roster.
+			for _, p in Players:GetPlayers() do
+				if p.Parent == Players then
+					local ok, err = pcall(function()
+						p:LoadCharacterAsync()
+					end)
+					if not ok and p.Parent == Players then
+						warn("[MatchScaleManager] Respawn: " .. tostring(err))
+					end
+				end
 			end
+		end
+		setPhase("Forest")
+	end
+	local function finish(outcome: string)
+		if phase ~= "Active" then
 			return
 		end
-		revertToSingleIfNeeded()
-	end)
-end
-
--- ── Objective key/fuse tracking ──────────────────────────────────────────────
-local function setupObjectiveTracking(objectives: ObjectiveSet, remotes: Folder)
-	local progressEvent = ensureRemote(remotes, "ObjectiveProgress")
-
-	local keysCollected = 0
-	local fusesCollected = 0
-
-	remotes:SetAttribute("Keys", 0)
-	remotes:SetAttribute("Fuses", 0)
-	remotes:SetAttribute("KeysTotal", objectives.keys)
-	remotes:SetAttribute("FusesTotal", objectives.fuses)
-	local collectRemote = ensureRemote(remotes, "CollectObjective")
-	collectRemote.OnServerEvent:Connect(function(_player: Player, objType: string)
-		if objType == "Key" and keysCollected < objectives.keys then
-			keysCollected += 1
-		elseif objType == "Fuse" and fusesCollected < objectives.fuses then
-			fusesCollected += 1
+		setPhase(outcome)
+		if gate then
+			gate.close()
 		end
-		remotes:SetAttribute("Keys", keysCollected)
-		remotes:SetAttribute("Fuses", fusesCollected)
-		progressEvent:FireAllClients({
-			keys = keysCollected,
-			keysTotal = objectives.keys,
-			fuses = fusesCollected,
-			fusesTotal = objectives.fuses,
-		})
-	end)
-end
-
--- ── Public init ───────────────────────────────────────────────────────────────
-function MatchScaleManager.init()
-	local remotes = ensureFolder(ReplicatedStorage, "MatchRemotes")
-	local count = activePlayers()
-	local objectives = computeObjectives(count)
-
-	print(
-		string.format(
-			"[MatchScaleManager] %d player(s) → %d key(s), %d fuse(s), dualLever=%s",
-			count,
-			objectives.keys,
-			objectives.fuses,
-			tostring(objectives.dualLever)
-		)
-	)
-
-	setupObjectiveTracking(objectives, remotes)
-
-	ensureRemote(remotes, "DoorUnlocked")
-	local started = false
-	local function updateParty()
-		if started then
+		for _, p in Players:GetPlayers() do
+			p:SetAttribute("SittingOut", true)
+		end
+		task.delay(REPLAY_DELAY, reset)
+	end
+	local function eliminate(p: Player)
+		if phase ~= "Active" or not members[p] then
 			return
 		end
-		local scaled = computeObjectives(activePlayers())
-		objectives.keys = scaled.keys
-		objectives.fuses = scaled.fuses
-		objectives.dualLever = scaled.dualLever
-		remotes:SetAttribute("KeysTotal", objectives.keys)
-		remotes:SetAttribute("FusesTotal", objectives.fuses)
+		members[p] = nil
+		state:SetAttribute("Survivors", survivors())
+		p:SetAttribute("SittingOut", true)
+		if survivors() == 0 then
+			finish("Wiped")
+		end
 	end
-	local function watchPlayer(player: Player)
-		updateParty()
-		local function enter()
-			if started or player:GetAttribute("DungeonEntered") ~= true then
-				return
+	local function enter(player: Player)
+		if phase ~= "Forest" or player:GetAttribute("DungeonEntered") ~= true or #rooms == 0 then
+			return
+		end
+		-- Reserve seats for connected teammates still completing the forest.
+		members[player] = true
+		for _, other in Players:GetPlayers() do
+			if survivors() < 4 then
+				members[other] = true
 			end
-			updateParty()
-			started = true
-			if objectives.dualLever then
-				setupDualLever(remotes)
+			other:SetAttribute("SittingOut", members[other] ~= true)
+		end
+		state:SetAttribute("Survivors", survivors())
+		scale(survivors())
+		setPhase("Active")
+		gate = ExitGate.install(rooms[#rooms], state, eligible, survivors, function()
+			finish("Escaped")
+		end)
+		claims = ObjectivePickups.spawn(rooms, keyTotal, fuseTotal, collect, eligible, function(kind)
+			if kind == "Key" then
+				keys += 1
 			else
-				setupSingleLever(remotes)
+				fuses += 1
+			end
+			publish()
+			if keys == keyTotal and fuses == fuseTotal and gate then
+				gate.arm()
+			end
+		end)
+	end
+	local function watch(p: Player)
+		p:SetAttribute("SittingOut", phase ~= "Preparing" and phase ~= "Forest" and not members[p])
+		if phase == "Forest" then
+			scale(#Players:GetPlayers())
+		end
+		p:GetAttributeChangedSignal("DungeonEntered"):Connect(function()
+			enter(p)
+		end)
+		local function characterAdded(character: Model)
+			local humanoid = character:WaitForChild("Humanoid", 10)
+			if humanoid and humanoid:IsA("Humanoid") then
+				humanoid.Died:Once(function()
+					if p.Character == character then
+						eliminate(p)
+					end
+				end)
 			end
 		end
-		player:GetAttributeChangedSignal("DungeonEntered"):Connect(enter)
-		enter()
+		p.CharacterAdded:Connect(characterAdded)
+		p.CharacterRemoving:Connect(function()
+			eliminate(p)
+		end)
+		if p.Character then
+			task.spawn(characterAdded, p.Character)
+		end
+		enter(p)
 	end
-	Players.PlayerAdded:Connect(watchPlayer)
-	Players.PlayerRemoving:Connect(function()
-		task.defer(updateParty)
+	Players.PlayerAdded:Connect(watch)
+	Players.PlayerRemoving:Connect(function(p)
+		eliminate(p)
+		task.defer(function()
+			if phase == "Forest" then
+				scale(#Players:GetPlayers())
+			end
+		end)
 	end)
-	for _, player in Players:GetPlayers() do
-		watchPlayer(player)
+	for _, p in Players:GetPlayers() do
+		watch(p)
 	end
-
-	print("[MatchScaleManager] Objective scaling ready.")
+	reset()
+	for _, p in Players:GetPlayers() do
+		enter(p)
+	end
 end
 
 return MatchScaleManager

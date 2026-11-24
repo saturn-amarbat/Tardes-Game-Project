@@ -239,6 +239,12 @@ end
 
 -- ── Initialisation ──────────────────────────────────────────────────────────
 function FlashlightController.init()
+	Workspace:GetAttributeChangedSignal("ExpeditionNumber"):Connect(function()
+		battery = CONFIG.MAX_BATTERY
+		if not isEnabled then
+			FlashlightController.toggle()
+		end
+	end)
 	local rig, root, spot, point, sfx = createFlashlightRig()
 	_lightModel = rig
 	lightRoot = root

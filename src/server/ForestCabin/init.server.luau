@@ -1,6 +1,8 @@
 --!strict
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
+local teleportModule = script.Parent:FindFirstChild("TeleportManager")
+local TeleportManager = if teleportModule and teleportModule:IsA("ModuleScript") then require(teleportModule) else nil
 
 local opening = (script:FindFirstChild("Opening") or Workspace:WaitForChild("ForestCabinOpening")) :: Model
 local cabin = opening:WaitForChild("Wardens Cottage") :: Model
@@ -92,6 +94,16 @@ liftPrompt.Triggered:Connect(function(player)
 		return
 	end
 	local destination = floor.Position + Vector3.yAxis * 3.5
+	if TeleportManager then
+		local arrived = TeleportManager.teleportPlayer(player, CFrame.new(destination), function()
+			return character == nearby(player, lift) and first ~= nil and first.Parent == dungeon
+		end)
+		if arrived then
+			player:SetAttribute("DungeonEntered", true)
+		end
+		busy[player] = nil
+		return
+	end
 	local streamed = pcall(function()
 		player:RequestStreamAroundAsync(destination, 6)
 	end)
@@ -101,6 +113,7 @@ liftPrompt.Triggered:Connect(function(player)
 	end
 	if character == nearby(player, lift) and first and first.Parent == dungeon then
 		character:PivotTo(CFrame.new(destination))
+		player:SetAttribute("DungeonEntered", true)
 	end
 	busy[player] = nil
 end)

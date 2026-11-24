@@ -1,4 +1,27 @@
 --!strict
+--[[
+  FRONT-FACE SNAPPING RULE (read before editing anchor placement):
+  ─────────────────────────────────────────────────────────────────
+  Every room template stores two transparent anchor Parts:
+    • Entrance  – sits at the room's entry doorway, LookVector pointing
+                  OUT of the room (away from interior, i.e. –Z in model space).
+    • Exit      – sits at the room's exit doorway, LookVector pointing
+                  OUT of the room (into the corridor ahead, i.e. +Z in model
+                  space for straight rooms, rotated for L-shapes).
+
+  Snap algorithm (do NOT change the sign or rotation):
+    1. The previous room's Exit CFrame faces outward → its LookVector
+       points in the direction the next room should continue.
+    2. We want the new room's Entrance to face that same outward direction
+       (they are back-to-back), so we flip the Exit CFrame 180 ° around Y:
+           targetEntranceCF = prevExitCF * CFrame.Angles(0, math.pi, 0)
+    3. Compute the offset from the room's pivot to its Entrance in local space,
+       then solve for the new pivot that places Entrance at targetEntranceCF:
+           newPivot = targetEntranceCF * entranceLocal:Inverse()
+    4. PivotTo(newPivot) moves the whole model so Entrance aligns exactly.
+  This guarantees rooms always connect face-to-face and never spawn backwards.
+]]
+
 local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -13,7 +36,6 @@ export type Room = {
 local function getRoomAnchors(room: Model): (BasePart?, BasePart?)
 	local entrance = room:FindFirstChild("Entrance")
 	local exit = room:FindFirstChild("Exit")
-
 	if entrance and entrance:IsA("BasePart") and exit and exit:IsA("BasePart") then
 		return entrance, exit
 	end
@@ -38,6 +60,7 @@ function RoomGenerator.generate(numRooms: number): { Model }
 
 	local spawnedRooms: { Model } = {}
 	local currentExitCF: CFrame = CFrame.new(0, 0, 0)
+	local spawnPad = Workspace:FindFirstChild("StartSpawn")
 
 	local random = Random.new()
 
@@ -55,41 +78,37 @@ function RoomGenerator.generate(numRooms: number): { Model }
 
 			local entrance, exit = getRoomAnchors(candidate)
 			if not entrance or not exit then
-				warn("Template " .. chosenTemplate.Name .. " is missing Entrance or Exit part! Skipping.")
+				warn("Template " .. chosenTemplate.Name .. " missing Entrance/Exit – skipping.")
 				candidate:Destroy()
 				continue
 			end
 
-			-- Room placement alignment:
-			-- The new room's entrance anchor must align with currentExitCF.
-			-- Note: Entrance points outward (180 deg from inside).
-			-- To snap entrance flush with exit (which faces outward into the next room):
-			-- targetEntranceCF = currentExitCF * CFrame.Angles(0, math.pi, 0)
+			--[[
+			  SNAP MATH (see module header for full explanation):
+			  targetEntranceCF = prevExit flipped 180° → back-to-back faces.
+			  newPivot = targetEntranceCF * (pivotToEntrance):Inverse()
+			]]
 			local targetEntranceCF = currentExitCF * CFrame.Angles(0, math.pi, 0)
-			local spawnPad = Workspace:FindFirstChild("StartSpawn")
 			if roomIndex == 1 and spawnPad and spawnPad:IsA("BasePart") then
-				-- Keep the room floor above the shared place's baseplate.
+				-- Align the first doorway's threshold with the top of the spawn pad.
 				targetEntranceCF = CFrame.new(
 					spawnPad.Position + Vector3.yAxis * (spawnPad.Size.Y + entrance.Size.Y) / 2
 				) * targetEntranceCF.Rotation
 			end
 			local entranceLocalCF = candidate:GetPivot():ToObjectSpace(entrance.CFrame)
 			local newRoomPivot = targetEntranceCF * entranceLocalCF:Inverse()
-
 			candidate:PivotTo(newRoomPivot)
 
-			-- Check for overlap:
-			-- Use candidate's bounding box shrunk slightly to avoid false positives at the seam.
-			local candidateCFrame, candidateSize = candidate:GetBoundingBox()
-			local overlapSize = candidateSize - Vector3.new(1.5, 0.5, 1.5)
-			if overlapSize.X <= 0 or overlapSize.Y <= 0 or overlapSize.Z <= 0 then
-				overlapSize = candidateSize
-			end
+			-- Overlap check: shrink bbox slightly to avoid seam false-positives.
+			local candidateCF, candidateSize = candidate:GetBoundingBox()
+			local overlapSize = Vector3.new(
+				math.max(candidateSize.X - 1.5, 0.1),
+				math.max(candidateSize.Y - 0.5, 0.1),
+				math.max(candidateSize.Z - 1.5, 0.1)
+			)
 
 			local overlapParams = OverlapParams.new()
 			overlapParams.FilterType = Enum.RaycastFilterType.Include
-
-			-- Build list of parts to check against (all parts in previously spawned rooms, excluding exit anchors and adjoining wall parts)
 			local existingParts: { BasePart } = {}
 			for _, r in ipairs(spawnedRooms) do
 				for _, part in ipairs(r:GetDescendants()) do
@@ -100,14 +119,12 @@ function RoomGenerator.generate(numRooms: number): { Model }
 			end
 			overlapParams.FilterDescendantsInstances = existingParts
 
-			local overlappingParts = Workspace:GetPartBoundsInBox(candidateCFrame, overlapSize, overlapParams)
-			-- Filter out any non-colliding parts and parts touching right at the entrance plane
+			local hits = Workspace:GetPartBoundsInBox(candidateCF, overlapSize, overlapParams)
 			local solidOverlaps = 0
-			for _, part in ipairs(overlappingParts) do
+			for _, part in ipairs(hits) do
 				if part.CanCollide then
-					-- Distance between part and candidate's entrance
-					local distToEntrance = (part.Position - entrance.Position).Magnitude
-					if distToEntrance > 3 then
+					-- Ignore parts within 3 studs of the entrance seam (shared doorframe geometry).
+					if (part.Position - entrance.Position).Magnitude > 3 then
 						solidOverlaps += 1
 					end
 				end
@@ -116,7 +133,6 @@ function RoomGenerator.generate(numRooms: number): { Model }
 			if solidOverlaps == 0 then
 				candidate.Parent = dungeonFolder
 				table.insert(spawnedRooms, candidate)
-				-- Update current exit CFrame for next room
 				currentExitCF = exit.CFrame
 				placed = true
 				break
@@ -126,17 +142,12 @@ function RoomGenerator.generate(numRooms: number): { Model }
 		end
 
 		if not placed then
-			warn(
-				string.format(
-					"RoomGenerator: Could not place room %d without overlap. Generator halted early.",
-					roomIndex
-				)
-			)
+			warn(string.format("RoomGenerator: cannot place room %d without overlap – halting early.", roomIndex))
 			break
 		end
 	end
 
-	print(string.format("RoomGenerator: Successfully generated %d non-overlapping rooms.", #spawnedRooms))
+	print(string.format("RoomGenerator: generated %d/%d rooms.", #spawnedRooms, numRooms))
 	return spawnedRooms
 end
 

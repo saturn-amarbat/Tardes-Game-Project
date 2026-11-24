@@ -13,6 +13,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
 
+local HUDIcons = require(script.Parent.HUDIcons)
 local FieldJournal = {}
 
 local player = Players.LocalPlayer
@@ -57,25 +58,50 @@ function FieldJournal.init()
 	local toggleBtn = Instance.new("TextButton")
 	toggleBtn.Name = "JournalToggle"
 	toggleBtn.AnchorPoint = Vector2.new(1, 0)
-	toggleBtn.Size = UDim2.fromOffset(122, 34)
+	toggleBtn.Size = UDim2.fromOffset(138, 34)
 	toggleBtn.Position = UDim2.new(1, -16, 0, 16)
-	toggleBtn.BackgroundColor3 = Color3.fromRGB(26, 38, 34)
-	toggleBtn.BackgroundTransparency = 0.16
-	toggleBtn.Font = Enum.Font.GothamMedium
-	toggleBtn.TextSize = 13
-	toggleBtn.TextColor3 = Color3.fromRGB(240, 224, 184)
-	toggleBtn.Text = "Journal [J] 0/7"
+	toggleBtn.BackgroundColor3 = Color3.fromRGB(14, 17, 16)
+	toggleBtn.BackgroundTransparency = 0.14
+	toggleBtn.Text = ""
 	toggleBtn.Visible = false
 	toggleBtn.Parent = gui
 
 	local toggleCorner = Instance.new("UICorner")
-	toggleCorner.CornerRadius = UDim.new(0, 6)
+	toggleCorner.CornerRadius = UDim.new(0, 8)
 	toggleCorner.Parent = toggleBtn
 
 	local toggleStroke = Instance.new("UIStroke")
-	toggleStroke.Color = Color3.fromRGB(118, 108, 82)
-	toggleStroke.Transparency = 0.35
+	toggleStroke.Color = Color3.fromRGB(68, 76, 72)
+	toggleStroke.Transparency = 0.3
 	toggleStroke.Parent = toggleBtn
+
+	local jIcon = HUDIcons.journal(toggleBtn, Color3.fromRGB(228, 198, 130), 16)
+	jIcon.Position = UDim2.fromOffset(10, 9)
+
+	local toggleLabel = Instance.new("TextLabel")
+	toggleLabel.Position = UDim2.fromOffset(32, 0)
+	toggleLabel.Size = UDim2.new(1, -64, 1, 0)
+	toggleLabel.BackgroundTransparency = 1
+	toggleLabel.Font = Enum.Font.GothamMedium
+	toggleLabel.TextSize = 13
+	toggleLabel.TextXAlignment = Enum.TextXAlignment.Left
+	toggleLabel.TextColor3 = Color3.fromRGB(238, 234, 224)
+	toggleLabel.Text = "Journal 0/7"
+	toggleLabel.Parent = toggleBtn
+
+	local keyBadge = Instance.new("TextLabel")
+	keyBadge.AnchorPoint = Vector2.new(1, 0.5)
+	keyBadge.Position = UDim2.new(1, -8, 0.5, 0)
+	keyBadge.Size = UDim2.fromOffset(20, 20)
+	keyBadge.BackgroundColor3 = Color3.fromRGB(28, 34, 32)
+	keyBadge.Font = Enum.Font.GothamBold
+	keyBadge.TextSize = 11
+	keyBadge.TextColor3 = Color3.fromRGB(228, 198, 130)
+	keyBadge.Text = "J"
+	keyBadge.Parent = toggleBtn
+	local kbCorn = Instance.new("UICorner")
+	kbCorn.CornerRadius = UDim.new(0, 4)
+	kbCorn.Parent = keyBadge
 
 	-- Main Modal Drawer
 	local panel = Instance.new("Frame")
@@ -110,13 +136,13 @@ function FieldJournal.init()
 	header.Parent = panel
 
 	local closeBtn = Instance.new("TextButton")
-	closeBtn.Size = UDim2.fromOffset(64, 28)
-	closeBtn.Position = UDim2.new(1, -78, 0, 14)
-	closeBtn.BackgroundColor3 = Color3.fromRGB(76, 36, 32)
-	closeBtn.TextColor3 = Color3.fromRGB(242, 236, 226)
+	closeBtn.Size = UDim2.fromOffset(28, 28)
+	closeBtn.Position = UDim2.new(1, -40, 0, 14)
+	closeBtn.BackgroundColor3 = Color3.fromRGB(58, 32, 28)
+	closeBtn.TextColor3 = Color3.fromRGB(238, 234, 224)
 	closeBtn.Font = Enum.Font.GothamBold
-	closeBtn.TextSize = 12
-	closeBtn.Text = "Close"
+	closeBtn.TextSize = 14
+	closeBtn.Text = "×"
 	closeBtn.Parent = panel
 	local cCorn = Instance.new("UICorner")
 	cCorn.CornerRadius = UDim.new(0, 6)
@@ -228,7 +254,7 @@ function FieldJournal.init()
 				b.Parent = card
 			end
 		end
-		toggleBtn.Text = string.format("Journal [J] %d/%d", count, #clues)
+		toggleLabel.Text = string.format("Journal %d/%d", count, #clues)
 	end
 
 	local function rebuildGear()

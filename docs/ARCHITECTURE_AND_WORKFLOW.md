@@ -30,7 +30,8 @@ c:/Users/sanch/Projects/horror-game/
     │   ├── FlashlightReplicaClient.luau# Teammate flashlight SpotLight replication renderer
     │   ├── ForestWeather.client.luau   # Overcast dusk fog/sky/exposure above cellar threshold
     │   ├── HorrorFeedback.luau         # Stalker proximity heartbeat vignette, grade & safe badge
-    │   ├── ObjectiveHUD.luau           # Keys/fuses/scrap, battery/HP/stamina bars, CluePanel
+    │   ├── HUDIcons.luau               # Vector-style geometric HUD icons (key, fuse, scrap, torch)
+    │   ├── ObjectiveHUD.luau           # Unified field dossier HUD, CluePanel & center reticle
     │   ├── PrologueController.luau     # Blackpine location card, guidance & omen skip UI
     │   ├── SpectatorController.luau    # Spectator camera cycling & earned Revive Token UI
     │   └── SprintController.luau       # Horror stamina/sprint (LeftShift/L3/touch) + FOV kick

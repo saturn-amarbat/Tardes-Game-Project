@@ -1,5 +1,12 @@
 --!strict
--- Uses replicated expedition state and displays clue text when it arrives.
+--[[
+  ObjectiveHUD  –  Tasteful 1970s Blackpine field-survey HUD.
+
+  Unifies supplies (Keys, Fuses, Scrap), active objective guidance, and compact
+  survival vitals (Battery, Health, Stamina) into one dark-slate dossier card
+  with crisp vector-style icons (HUDIcons), plus a subtle center reticle,
+  red damage vignette, and CluePanel reader.
+]]
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -7,6 +14,7 @@ local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 
 local FlashlightController = require(script.Parent.FlashlightController)
+local HUDIcons = require(script.Parent.HUDIcons)
 local SprintController = require(script.Parent.SprintController)
 
 local player = Players.LocalPlayer
@@ -17,58 +25,220 @@ if existingHud then
 	existingHud:Destroy()
 end
 
--- ── Build HUD ─────────────────────────────────────────────────────────────────
+local PALETTE = {
+	CardBg = Color3.fromRGB(14, 17, 16),
+	Stroke = Color3.fromRGB(68, 76, 72),
+	Track = Color3.fromRGB(28, 34, 32),
+	Brass = Color3.fromRGB(228, 198, 130),
+	Ivory = Color3.fromRGB(238, 234, 224),
+	Muted = Color3.fromRGB(156, 164, 158),
+	Copper = Color3.fromRGB(196, 146, 98),
+	Sage = Color3.fromRGB(96, 186, 118),
+	Steel = Color3.fromRGB(154, 198, 220),
+	Crimson = Color3.fromRGB(208, 66, 58),
+}
+
 local gui = Instance.new("ScreenGui")
 gui.Name = "ObjectiveHUD"
 gui.ResetOnSpawn = false
 gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 gui.Enabled = player:GetAttribute("DungeonEntered") == true
-
 gui.Parent = playerGui
 
--- Top-left objective counter.
-local counterFrame = Instance.new("Frame")
-counterFrame.Name = "CounterFrame"
-counterFrame.Size = UDim2.fromOffset(290, 71)
-counterFrame.Position = UDim2.fromOffset(16, 16)
-counterFrame.BackgroundColor3 = Color3.fromRGB(26, 41, 37)
-counterFrame.BackgroundTransparency = 0.16
-counterFrame.Parent = gui
+-- Minimal center aim reticle (helps aim camera prompts & flashlight beam)
+local reticle = Instance.new("Frame")
+reticle.Name = "AimReticle"
+reticle.AnchorPoint = Vector2.new(0.5, 0.5)
+reticle.Size = UDim2.fromOffset(3, 3)
+reticle.Position = UDim2.fromScale(0.5, 0.5)
+reticle.BackgroundColor3 = PALETTE.Ivory
+reticle.BackgroundTransparency = 0.52
+reticle.BorderSizePixel = 0
+reticle.Parent = gui
+local rCorn = Instance.new("UICorner")
+rCorn.CornerRadius = UDim.new(1, 0)
+rCorn.Parent = reticle
 
-local counterCorner = Instance.new("UICorner")
-counterCorner.CornerRadius = UDim.new(0, 4)
-counterCorner.Parent = counterFrame
+-- Unified top-left Field Dossier Card
+local card = Instance.new("Frame")
+card.Name = "CounterFrame"
+card.Size = UDim2.fromOffset(278, 116)
+card.Position = UDim2.fromOffset(16, 16)
+card.BackgroundColor3 = PALETTE.CardBg
+card.BackgroundTransparency = 0.14
+card.Parent = gui
 
-local counterLabel = Instance.new("TextLabel")
-counterLabel.Size = UDim2.new(1, -24, 0, 24)
-counterLabel.Position = UDim2.fromOffset(12, 8)
-counterLabel.TextXAlignment = Enum.TextXAlignment.Left
-counterLabel.BackgroundTransparency = 1
-counterLabel.TextColor3 = Color3.new(1, 1, 1)
-counterLabel.Font = Enum.Font.GothamMedium
-counterLabel.TextSize = 15
-counterLabel.Text = ""
-counterLabel.Parent = counterFrame
+local cardCorner = Instance.new("UICorner")
+cardCorner.CornerRadius = UDim.new(0, 8)
+cardCorner.Parent = card
 
+local cardStroke = Instance.new("UIStroke")
+cardStroke.Color = PALETTE.Stroke
+cardStroke.Thickness = 1
+cardStroke.Transparency = 0.3
+cardStroke.Parent = card
+
+-- Row 1: Supplies Strip (Keys | Fuses | Scrap)
+local function makeCounterPill(xPos: number, width: number, makeIcon: (Instance) -> Frame): TextLabel
+	local holder = Instance.new("Frame")
+	holder.Position = UDim2.fromOffset(xPos, 10)
+	holder.Size = UDim2.fromOffset(width, 22)
+	holder.BackgroundTransparency = 1
+	holder.Parent = card
+
+	local icon = makeIcon(holder)
+	icon.Position = UDim2.fromOffset(0, 3)
+
+	local lbl = Instance.new("TextLabel")
+	lbl.Position = UDim2.fromOffset(22, 0)
+	lbl.Size = UDim2.new(1, -22, 1, 0)
+	lbl.BackgroundTransparency = 1
+	lbl.Font = Enum.Font.GothamBold
+	lbl.TextSize = 14
+	lbl.TextXAlignment = Enum.TextXAlignment.Left
+	lbl.TextColor3 = PALETTE.Ivory
+	lbl.Text = "0/1"
+	lbl.Parent = holder
+	return lbl
+end
+
+local keysLabel = makeCounterPill(14, 76, function(p)
+	return HUDIcons.key(p, PALETTE.Brass, 16)
+end)
+local fusesLabel = makeCounterPill(98, 76, function(p)
+	return HUDIcons.fuse(p, PALETTE.Copper, 16)
+end)
+local scrapLabel = makeCounterPill(184, 80, function(p)
+	return HUDIcons.scrap(p, PALETTE.Brass, 16)
+end)
+scrapLabel.Text = "15"
+
+-- Row 2: Active objective guidance
 local instruction = Instance.new("TextLabel")
-instruction.Size = UDim2.new(1, -24, 0, 30)
-instruction.Position = UDim2.fromOffset(12, 31)
+instruction.Position = UDim2.fromOffset(14, 34)
+instruction.Size = UDim2.new(1, -28, 0, 18)
 instruction.BackgroundTransparency = 1
-instruction.TextColor3 = Color3.fromRGB(225, 202, 153)
+instruction.TextColor3 = PALETTE.Brass
 instruction.Font = Enum.Font.Gotham
-instruction.TextSize = 13
-instruction.TextWrapped = true
+instruction.TextSize = 12
+instruction.TextTruncate = Enum.TextTruncate.AtEnd
 instruction.TextXAlignment = Enum.TextXAlignment.Left
-instruction.Parent = counterFrame
+instruction.Text = "Search the galleries for supplies"
+instruction.Parent = card
 
--- Centre clue reader panel (hidden by default).
+-- Hairline divider
+local divider = Instance.new("Frame")
+divider.Position = UDim2.fromOffset(14, 58)
+divider.Size = UDim2.new(1, -28, 0, 1)
+divider.BackgroundColor3 = PALETTE.Stroke
+divider.BackgroundTransparency = 0.55
+divider.BorderSizePixel = 0
+divider.Parent = card
+
+-- Row 3a: Battery track + % readout
+local batRow = Instance.new("Frame")
+batRow.Name = "BatteryFrame"
+batRow.Position = UDim2.fromOffset(14, 66)
+batRow.Size = UDim2.new(1, -28, 0, 18)
+batRow.BackgroundTransparency = 1
+batRow.Parent = card
+
+local batIcon = HUDIcons.flashlight(batRow, PALETTE.Brass, 15)
+batIcon.Position = UDim2.fromOffset(0, 1)
+
+local batTrack = Instance.new("Frame")
+batTrack.Position = UDim2.fromOffset(22, 6)
+batTrack.Size = UDim2.new(1, -60, 0, 5)
+batTrack.BackgroundColor3 = PALETTE.Track
+batTrack.BorderSizePixel = 0
+batTrack.Parent = batRow
+local btCorn = Instance.new("UICorner")
+btCorn.CornerRadius = UDim.new(1, 0)
+btCorn.Parent = batTrack
+
+local batteryFill = Instance.new("Frame")
+batteryFill.Name = "Fill"
+batteryFill.Size = UDim2.fromScale(1, 1)
+batteryFill.BackgroundColor3 = PALETTE.Brass
+batteryFill.BorderSizePixel = 0
+batteryFill.Parent = batTrack
+local bfCorn = Instance.new("UICorner")
+bfCorn.CornerRadius = UDim.new(1, 0)
+bfCorn.Parent = batteryFill
+
+local batteryText = Instance.new("TextLabel")
+batteryText.Position = UDim2.new(1, -34, 0, 0)
+batteryText.Size = UDim2.fromOffset(34, 18)
+batteryText.BackgroundTransparency = 1
+batteryText.Font = Enum.Font.GothamMedium
+batteryText.TextSize = 11
+batteryText.TextXAlignment = Enum.TextXAlignment.Right
+batteryText.TextColor3 = PALETTE.Muted
+batteryText.Text = "100%"
+batteryText.Parent = batRow
+
+-- Row 3b: Paired Health & Stamina tracks
+local vitalsRow = Instance.new("Frame")
+vitalsRow.Name = "VitalsRow"
+vitalsRow.Position = UDim2.fromOffset(14, 88)
+vitalsRow.Size = UDim2.new(1, -28, 0, 16)
+vitalsRow.BackgroundTransparency = 1
+vitalsRow.Parent = card
+
+local hpIcon = HUDIcons.health(vitalsRow, PALETTE.Sage, 13)
+hpIcon.Position = UDim2.fromOffset(1, 1)
+
+local hpTrack = Instance.new("Frame")
+hpTrack.Position = UDim2.fromOffset(22, 5)
+hpTrack.Size = UDim2.fromOffset(102, 5)
+hpTrack.BackgroundColor3 = PALETTE.Track
+hpTrack.BorderSizePixel = 0
+hpTrack.Parent = vitalsRow
+local htCorn = Instance.new("UICorner")
+htCorn.CornerRadius = UDim.new(1, 0)
+htCorn.Parent = hpTrack
+
+local healthFill = Instance.new("Frame")
+healthFill.Name = "Fill"
+healthFill.Size = UDim2.fromScale(1, 1)
+healthFill.BackgroundColor3 = PALETTE.Sage
+healthFill.BorderSizePixel = 0
+healthFill.Parent = hpTrack
+local hfCorn = Instance.new("UICorner")
+hfCorn.CornerRadius = UDim.new(1, 0)
+hfCorn.Parent = healthFill
+
+local stamIcon = HUDIcons.sprint(vitalsRow, PALETTE.Steel, 14)
+stamIcon.Position = UDim2.fromOffset(136, 1)
+
+local stamTrack = Instance.new("Frame")
+stamTrack.Position = UDim2.fromOffset(156, 5)
+stamTrack.Size = UDim2.new(1, -156, 0, 5)
+stamTrack.BackgroundColor3 = PALETTE.Track
+stamTrack.BorderSizePixel = 0
+stamTrack.Parent = vitalsRow
+local stCorn = Instance.new("UICorner")
+stCorn.CornerRadius = UDim.new(1, 0)
+stCorn.Parent = stamTrack
+
+local staminaFill = Instance.new("Frame")
+staminaFill.Name = "Fill"
+staminaFill.Size = UDim2.fromScale(1, 1)
+staminaFill.BackgroundColor3 = PALETTE.Steel
+staminaFill.BorderSizePixel = 0
+staminaFill.Parent = stamTrack
+local sfCorn = Instance.new("UICorner")
+sfCorn.CornerRadius = UDim.new(1, 0)
+sfCorn.Parent = staminaFill
+
+-- Centre Clue Reader Panel
 local cluePanel = Instance.new("Frame")
 cluePanel.Name = "CluePanel"
 cluePanel.AnchorPoint = Vector2.new(0.5, 0.5)
-cluePanel.Size = UDim2.fromOffset(440, 220)
+cluePanel.Size = UDim2.fromOffset(440, 224)
 cluePanel.Position = UDim2.fromScale(0.5, 0.5)
-cluePanel.BackgroundColor3 = Color3.fromRGB(22, 19, 15)
-cluePanel.BackgroundTransparency = 0.06
+cluePanel.BackgroundColor3 = Color3.fromRGB(20, 17, 14)
+cluePanel.BackgroundTransparency = 0.05
 cluePanel.Visible = false
 cluePanel.Parent = gui
 
@@ -78,26 +248,37 @@ cluePanelCorner.Parent = cluePanel
 
 local clueStroke = Instance.new("UIStroke")
 clueStroke.Color = Color3.fromRGB(132, 108, 72)
-clueStroke.Thickness = 1.5
+clueStroke.Thickness = 1.3
 clueStroke.Transparency = 0.25
 clueStroke.Parent = cluePanel
 
+local clueIcon = HUDIcons.journal(cluePanel, PALETTE.Brass, 18)
+clueIcon.Position = UDim2.fromOffset(18, 17)
+
 local clueTitle = Instance.new("TextLabel")
-clueTitle.Size = UDim2.new(1, -90, 0, 36)
-clueTitle.Position = UDim2.fromOffset(18, 14)
+clueTitle.Size = UDim2.new(1, -96, 0, 32)
+clueTitle.Position = UDim2.fromOffset(44, 11)
 clueTitle.BackgroundTransparency = 1
-clueTitle.TextColor3 = Color3.fromRGB(242, 212, 154)
+clueTitle.TextColor3 = PALETTE.Brass
 clueTitle.Font = Enum.Font.Garamond
 clueTitle.TextSize = 24
 clueTitle.TextXAlignment = Enum.TextXAlignment.Left
 clueTitle.Text = ""
 clueTitle.Parent = cluePanel
 
+local clueRule = Instance.new("Frame")
+clueRule.Position = UDim2.fromOffset(18, 48)
+clueRule.Size = UDim2.new(1, -36, 0, 1)
+clueRule.BackgroundColor3 = Color3.fromRGB(132, 108, 72)
+clueRule.BackgroundTransparency = 0.65
+clueRule.BorderSizePixel = 0
+clueRule.Parent = cluePanel
+
 local clueBody = Instance.new("TextLabel")
-clueBody.Size = UDim2.new(1, -36, 1, -68)
-clueBody.Position = UDim2.fromOffset(18, 54)
+clueBody.Size = UDim2.new(1, -36, 1, -72)
+clueBody.Position = UDim2.fromOffset(18, 58)
 clueBody.BackgroundTransparency = 1
-clueBody.TextColor3 = Color3.fromRGB(232, 226, 214)
+clueBody.TextColor3 = PALETTE.Ivory
 clueBody.Font = Enum.Font.Gotham
 clueBody.TextSize = 15
 clueBody.TextWrapped = true
@@ -106,15 +287,14 @@ clueBody.TextYAlignment = Enum.TextYAlignment.Top
 clueBody.Text = ""
 clueBody.Parent = cluePanel
 
--- Close button.
 local clueClose = Instance.new("TextButton")
-clueClose.Size = UDim2.fromOffset(64, 28)
-clueClose.Position = UDim2.new(1, -78, 0, 14)
-clueClose.BackgroundColor3 = Color3.fromRGB(74, 34, 30)
-clueClose.TextColor3 = Color3.fromRGB(240, 234, 224)
+clueClose.Size = UDim2.fromOffset(28, 28)
+clueClose.Position = UDim2.new(1, -40, 0, 12)
+clueClose.BackgroundColor3 = Color3.fromRGB(58, 32, 28)
+clueClose.TextColor3 = PALETTE.Ivory
 clueClose.Font = Enum.Font.GothamBold
-clueClose.TextSize = 13
-clueClose.Text = "Close"
+clueClose.TextSize = 14
+clueClose.Text = "×"
 clueClose.Parent = cluePanel
 local closeCorn = Instance.new("UICorner")
 closeCorn.CornerRadius = UDim.new(0, 6)
@@ -124,99 +304,7 @@ clueClose.Activated:Connect(function()
 	cluePanel.Visible = false
 end)
 
--- Slim battery indicator directly below CounterFrame (zero overlap).
-local batteryFrame = Instance.new("Frame")
-batteryFrame.Name = "BatteryFrame"
-batteryFrame.Size = UDim2.fromOffset(290, 18)
-batteryFrame.Position = UDim2.fromOffset(16, 93)
-batteryFrame.BackgroundColor3 = Color3.fromRGB(20, 26, 24)
-batteryFrame.BackgroundTransparency = 0.2
-batteryFrame.Parent = gui
-
-local batteryCorner = Instance.new("UICorner")
-batteryCorner.CornerRadius = UDim.new(0, 4)
-batteryCorner.Parent = batteryFrame
-
-local batteryFill = Instance.new("Frame")
-batteryFill.Name = "Fill"
-batteryFill.Size = UDim2.fromScale(1, 1)
-batteryFill.BackgroundColor3 = Color3.fromRGB(238, 214, 152)
-batteryFill.BorderSizePixel = 0
-batteryFill.Parent = batteryFrame
-
-local batteryFillCorner = Instance.new("UICorner")
-batteryFillCorner.CornerRadius = UDim.new(0, 4)
-batteryFillCorner.Parent = batteryFill
-
-local batteryText = Instance.new("TextLabel")
-batteryText.Size = UDim2.fromScale(1, 1)
-batteryText.BackgroundTransparency = 1
-batteryText.Font = Enum.Font.GothamMedium
-batteryText.TextSize = 11
-batteryText.TextColor3 = Color3.fromRGB(240, 238, 232)
-batteryText.TextStrokeTransparency = 0.5
-batteryText.Text = "Battery 100%"
-batteryText.Parent = batteryFrame
-
--- Slim health bar directly below BatteryFrame.
-local healthFrame = Instance.new("Frame")
-healthFrame.Name = "HealthFrame"
-healthFrame.Size = UDim2.fromOffset(290, 14)
-healthFrame.Position = UDim2.fromOffset(16, 115)
-healthFrame.BackgroundColor3 = Color3.fromRGB(20, 26, 24)
-healthFrame.BackgroundTransparency = 0.2
-healthFrame.Parent = gui
-
-local healthCorner = Instance.new("UICorner")
-healthCorner.CornerRadius = UDim.new(0, 4)
-healthCorner.Parent = healthFrame
-
-local healthFill = Instance.new("Frame")
-healthFill.Name = "Fill"
-healthFill.Size = UDim2.fromScale(1, 1)
-healthFill.BackgroundColor3 = Color3.fromRGB(96, 186, 114)
-healthFill.BorderSizePixel = 0
-healthFill.Parent = healthFrame
-
-local healthFillCorner = Instance.new("UICorner")
-healthFillCorner.CornerRadius = UDim.new(0, 4)
-healthFillCorner.Parent = healthFill
-
-local healthText = Instance.new("TextLabel")
-healthText.Size = UDim2.fromScale(1, 1)
-healthText.BackgroundTransparency = 1
-healthText.Font = Enum.Font.GothamMedium
-healthText.TextSize = 10
-healthText.TextColor3 = Color3.fromRGB(240, 238, 232)
-healthText.TextStrokeTransparency = 0.5
-healthText.Text = "Health 100%"
-healthText.Parent = healthFrame
-
--- Slim stamina bar directly below HealthFrame.
-local staminaFrame = Instance.new("Frame")
-staminaFrame.Name = "StaminaFrame"
-staminaFrame.Size = UDim2.fromOffset(290, 11)
-staminaFrame.Position = UDim2.fromOffset(16, 133)
-staminaFrame.BackgroundColor3 = Color3.fromRGB(20, 26, 24)
-staminaFrame.BackgroundTransparency = 0.2
-staminaFrame.Parent = gui
-
-local staminaCorner = Instance.new("UICorner")
-staminaCorner.CornerRadius = UDim.new(0, 4)
-staminaCorner.Parent = staminaFrame
-
-local staminaFill = Instance.new("Frame")
-staminaFill.Name = "Fill"
-staminaFill.Size = UDim2.fromScale(1, 1)
-staminaFill.BackgroundColor3 = Color3.fromRGB(168, 206, 224)
-staminaFill.BorderSizePixel = 0
-staminaFill.Parent = staminaFrame
-
-local staminaFillCorner = Instance.new("UICorner")
-staminaFillCorner.CornerRadius = UDim.new(0, 4)
-staminaFillCorner.Parent = staminaFill
-
--- Red damage flash overlay when taking Stalker damage.
+-- Red damage flash overlay when taking Stalker damage
 local damageFlash = Instance.new("Frame")
 damageFlash.Name = "DamageFlash"
 damageFlash.Size = UDim2.fromScale(1, 1)
@@ -226,17 +314,17 @@ damageFlash.BorderSizePixel = 0
 damageFlash.ZIndex = 10
 damageFlash.Parent = gui
 
--- Top-centre banner for door/exit events (never overlaps centre CluePanel).
+-- Top-centre status banner (never overlaps centre CluePanel or SanctuaryBadge)
 local flashLabel = Instance.new("TextLabel")
 flashLabel.Name = "FlashLabel"
 flashLabel.AnchorPoint = Vector2.new(0.5, 0)
 flashLabel.Size = UDim2.new(0.55, 0, 0, 44)
-flashLabel.Position = UDim2.new(0.5, 0, 0, 84)
+flashLabel.Position = UDim2.new(0.5, 0, 0, 68)
 flashLabel.BackgroundTransparency = 1
-flashLabel.TextColor3 = Color3.fromRGB(100, 255, 140)
-flashLabel.Font = Enum.Font.GothamBold
-flashLabel.TextSize = 22
-flashLabel.TextStrokeTransparency = 0.3
+flashLabel.TextColor3 = Color3.fromRGB(118, 224, 152)
+flashLabel.Font = Enum.Font.GothamMedium
+flashLabel.TextSize = 19
+flashLabel.TextStrokeTransparency = 0.35
 flashLabel.Text = ""
 flashLabel.TextTransparency = 1
 flashLabel.Parent = gui
@@ -268,32 +356,32 @@ local function init()
 				then "Hold one exit lever for 3 seconds"
 				else "Hold both exit levers together for 3 seconds"
 		end
+
 		gui.Enabled = underground or waiting or message ~= ""
-		counterFrame.Visible = underground and not waiting and phase == "Active"
-		batteryFrame.Visible = counterFrame.Visible
-		healthFrame.Visible = counterFrame.Visible
-		staminaFrame.Visible = counterFrame.Visible
+		card.Visible = underground and not waiting and phase == "Active"
+		reticle.Visible = card.Visible and not cluePanel.Visible
+
 		instruction.Text = if matchRemotes:GetAttribute("ExitOpen")
 			then "Reach the extraction bulkhead"
 			elseif matchRemotes:GetAttribute("ObjectivesComplete") then "Operate the exit levers"
 			else "Search the galleries for supplies"
 		flashLabel.Text = message
-		flashLabel.TextSize = 21
-		flashLabel.TextWrapped = true
 		flashLabel.TextTransparency = 0
 		if not underground or waiting then
 			cluePanel.Visible = false
 		end
+
 		local scrap = player:GetAttribute("RunScrap")
-		counterLabel.Text = string.format(
-			"Keys %d/%d   Fuses %d/%d   Scrap %d",
-			matchRemotes:GetAttribute("Keys") or 0,
-			matchRemotes:GetAttribute("KeysTotal") or 1,
+		keysLabel.Text =
+			string.format("%d/%d", matchRemotes:GetAttribute("Keys") or 0, matchRemotes:GetAttribute("KeysTotal") or 1)
+		fusesLabel.Text = string.format(
+			"%d/%d",
 			matchRemotes:GetAttribute("Fuses") or 0,
-			matchRemotes:GetAttribute("FusesTotal") or 1,
-			if typeof(scrap) == "number" then scrap else 0
+			matchRemotes:GetAttribute("FusesTotal") or 1
 		)
+		scrapLabel.Text = tostring(if typeof(scrap) == "number" then scrap else 0)
 	end
+
 	matchRemotes.AttributeChanged:Connect(refreshProgress)
 	refreshProgress()
 
@@ -305,6 +393,8 @@ local function init()
 	local lastHp = 100
 	local lastStam = -1
 	RunService.Heartbeat:Connect(function()
+		reticle.Visible = card.Visible and not cluePanel.Visible
+
 		local char = player.Character
 		local hum = char and char:FindFirstChildOfClass("Humanoid")
 		if hum then
@@ -317,34 +407,32 @@ local function init()
 				lastHp = hpPct
 				healthFill.Size = UDim2.fromScale(hpPct / 100, 1)
 				healthFill.BackgroundColor3 = if hpPct <= 35
-					then Color3.fromRGB(204, 62, 54)
-					elseif hpPct <= 65 then Color3.fromRGB(224, 168, 76)
-					else Color3.fromRGB(96, 186, 114)
-				healthText.Text = string.format("Health %d%%", hpPct)
+					then PALETTE.Crimson
+					elseif hpPct <= 65 then PALETTE.Brass
+					else PALETTE.Sage
 			end
 		end
 
-		if not batteryFrame.Visible then
+		if not card.Visible then
 			return
 		end
+
 		local pct = math.clamp(math.floor(FlashlightController.getBattery() + 0.5), 0, 100)
 		if pct ~= lastPct then
 			lastPct = pct
 			batteryFill.Size = UDim2.fromScale(pct / 100, 1)
 			batteryFill.BackgroundColor3 = if pct <= 20
-				then Color3.fromRGB(206, 72, 62)
-				elseif pct <= 45 then Color3.fromRGB(224, 168, 76)
-				else Color3.fromRGB(238, 214, 152)
-			batteryText.Text = string.format("Battery %d%%", pct)
+				then PALETTE.Crimson
+				elseif pct <= 45 then PALETTE.Copper
+				else PALETTE.Brass
+			batteryText.Text = string.format("%d%%", pct)
 		end
 
 		local stamPct = math.clamp(math.floor(SprintController.getStamina() + 0.5), 0, 100)
 		if stamPct ~= lastStam then
 			lastStam = stamPct
 			staminaFill.Size = UDim2.fromScale(stamPct / 100, 1)
-			staminaFill.BackgroundColor3 = if stamPct <= 25
-				then Color3.fromRGB(218, 128, 86)
-				else Color3.fromRGB(168, 206, 224)
+			staminaFill.BackgroundColor3 = if stamPct <= 25 then PALETTE.Copper else PALETTE.Steel
 		end
 	end)
 
@@ -363,17 +451,17 @@ local function init()
 	if doorEv then
 		doorEv.OnClientEvent:Connect(function(status: string)
 			if status == "Locked" then
-				flashLabel.TextColor3 = Color3.fromRGB(255, 118, 92)
+				flashLabel.TextColor3 = Color3.fromRGB(240, 118, 92)
 				flashLabel.Text = "Locked — Missing Keys/Fuses"
 				flashLabel.TextTransparency = 0
 				task.delay(2.5, function()
 					if flashLabel.Text == "Locked — Missing Keys/Fuses" then
-						flashLabel.TextColor3 = Color3.fromRGB(100, 255, 140)
+						flashLabel.TextColor3 = Color3.fromRGB(118, 224, 152)
 						refreshProgress()
 					end
 				end)
 			else
-				flashLabel.TextColor3 = Color3.fromRGB(100, 255, 140)
+				flashLabel.TextColor3 = Color3.fromRGB(118, 224, 152)
 			end
 		end)
 	end

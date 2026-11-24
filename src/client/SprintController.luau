@@ -14,6 +14,7 @@ local StarterGui = game:GetService("StarterGui")
 local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 
+local HUDIcons = require(script.Parent.HUDIcons)
 local SprintController = {}
 
 local CONFIG = {
@@ -63,20 +64,26 @@ local function createTouchSprintButton()
 	-- Positioned cleanly above StarterGui/GameHUD/FlashlightButton
 	local btn = Instance.new("TextButton")
 	btn.Name = "SprintButton"
-	btn.Size = UDim2.fromOffset(76, 42)
-	btn.Position = UDim2.new(1, -108, 1, -162)
-	btn.AnchorPoint = Vector2.new(0, 0)
-	btn.BackgroundColor3 = Color3.fromRGB(26, 30, 28)
-	btn.BackgroundTransparency = 0.25
-	btn.Text = "RUN"
-	btn.Font = Enum.Font.GothamBold
-	btn.TextSize = 13
-	btn.TextColor3 = Color3.fromRGB(240, 232, 210)
+	btn.AnchorPoint = Vector2.new(1, 1)
+	btn.Size = UDim2.fromOffset(56, 38)
+	btn.Position = UDim2.new(1, -20, 1, -86)
+	btn.BackgroundColor3 = Color3.fromRGB(14, 17, 16)
+	btn.BackgroundTransparency = 0.14
+	btn.Text = ""
 	btn.Parent = gui
 
 	local corner = Instance.new("UICorner")
 	corner.CornerRadius = UDim.new(0, 8)
 	corner.Parent = btn
+
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = Color3.fromRGB(68, 76, 72)
+	stroke.Transparency = 0.3
+	stroke.Parent = btn
+
+	local icon = HUDIcons.sprint(btn, Color3.fromRGB(154, 198, 220), 20)
+	icon.AnchorPoint = Vector2.new(0.5, 0.5)
+	icon.Position = UDim2.fromScale(0.5, 0.5)
 
 	local _ = StarterGui
 	btn.MouseButton1Down:Connect(function()

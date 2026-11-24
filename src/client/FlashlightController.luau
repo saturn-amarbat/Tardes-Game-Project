@@ -30,6 +30,7 @@ local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 
 local FlashlightOptics = require(script.Parent.FlashlightOptics)
+local HUDIcons = require(script.Parent.HUDIcons)
 local FlashlightController = {}
 
 -- ── Configuration (tweak all feel/visual values here) ────────────────────────
@@ -79,6 +80,7 @@ local spillLight: SpotLight? = nil
 local fillLight: PointLight? = nil
 local dustBeam: Beam? = nil
 local clickSound: Sound? = nil
+local syncDockVisual: ((boolean) -> ())? = nil
 
 local currentCFrame = CFrame.new()
 local swayTime = 0
@@ -148,6 +150,62 @@ local function createFlashlightEmitter(): (Part, SpotLight, SpotLight, PointLigh
 	return emitter, core, spill, fill, beam, sfx
 end
 
+local function styleFlashlightDock(btn: GuiButton)
+	btn.AnchorPoint = Vector2.new(1, 1)
+	btn.Size = UDim2.fromOffset(56, 56)
+	btn.Position = UDim2.new(1, -20, 1, -20)
+	btn.BackgroundColor3 = Color3.fromRGB(14, 17, 16)
+	btn.BackgroundTransparency = 0.14
+	if btn:IsA("TextButton") then
+		btn.Text = ""
+	end
+
+	for _, c in btn:GetChildren() do
+		if c:IsA("GuiObject") or c:IsA("UICorner") or c:IsA("UIStroke") then
+			c:Destroy()
+		end
+	end
+
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(1, 0)
+	corner.Parent = btn
+
+	local stroke = Instance.new("UIStroke")
+	stroke.Thickness = 1.5
+	stroke.Color = Color3.fromRGB(68, 76, 72)
+	stroke.Transparency = 0.25
+	stroke.Parent = btn
+
+	local icon, rays = HUDIcons.flashlight(btn, Color3.fromRGB(228, 198, 130), 26)
+	icon.AnchorPoint = Vector2.new(0.5, 0.5)
+	icon.Position = UDim2.fromScale(0.5, 0.48)
+
+	if not UserInputService.TouchEnabled then
+		local keycap = Instance.new("TextLabel")
+		keycap.AnchorPoint = Vector2.new(0.5, 1)
+		keycap.Position = UDim2.new(0.5, 0, 1, -3)
+		keycap.Size = UDim2.fromOffset(18, 13)
+		keycap.BackgroundColor3 = Color3.fromRGB(24, 28, 26)
+		keycap.Font = Enum.Font.GothamBold
+		keycap.TextSize = 9
+		keycap.TextColor3 = Color3.fromRGB(210, 206, 194)
+		keycap.Text = "F"
+		keycap.Parent = btn
+		local kc = Instance.new("UICorner")
+		kc.CornerRadius = UDim.new(0, 3)
+		kc.Parent = keycap
+	end
+
+	syncDockVisual = function(enabled: boolean)
+		stroke.Color = if enabled then Color3.fromRGB(228, 198, 130) else Color3.fromRGB(68, 76, 72)
+		stroke.Transparency = if enabled then 0.1 else 0.4
+		for _, r in rays do
+			r.Visible = enabled
+		end
+	end
+	syncDockVisual(isOn)
+end
+
 local function ensureTouchButton()
 	local hud = player.PlayerGui:FindFirstChild("GameHUD")
 	if not hud and StarterGui:FindFirstChild("GameHUD") then
@@ -155,17 +213,14 @@ local function ensureTouchButton()
 	end
 	local authored = hud and hud:FindFirstChild("FlashlightButton")
 	if authored and authored:IsA("GuiButton") then
+		styleFlashlightDock(authored)
 		authored.Activated:Connect(function()
 			FlashlightController.toggle()
 		end)
 		return
 	end
 
-	if not UserInputService.TouchEnabled then
-		return
-	end
-
-	-- Clean up duplicate touch fallback if re-initialized
+	-- Clean up duplicate dock if re-initialized
 	local oldFallback = player.PlayerGui:FindFirstChild("FlashlightHUD_Fallback")
 	if oldFallback then
 		oldFallback:Destroy()
@@ -179,24 +234,14 @@ local function ensureTouchButton()
 
 	local btn = Instance.new("TextButton")
 	btn.Name = "FlashlightButton"
-	btn.Size = UDim2.fromOffset(80, 80)
-	btn.Position = UDim2.new(1, -100, 1, -120)
-	btn.AnchorPoint = Vector2.new(1, 1)
-	btn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-	btn.BackgroundTransparency = 0.3
-	btn.Text = "🔦"
-	btn.TextSize = 32
-	btn.Font = Enum.Font.GothamBold
-	btn.TextColor3 = Color3.new(1, 1, 1)
 	btn.Parent = gui
-
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0.5, 0)
-	corner.Parent = btn
+	styleFlashlightDock(btn)
 
 	btn.Activated:Connect(function()
 		FlashlightController.toggle()
-		hapticPulse()
+		if UserInputService.TouchEnabled then
+			hapticPulse()
+		end
 	end)
 end
 
@@ -223,6 +268,9 @@ function FlashlightController.setFlashlightState(state: boolean)
 	end
 	isOn = targetState
 	FlashlightController.setLights(isOn)
+	if syncDockVisual then
+		syncDockVisual(isOn)
+	end
 
 	if clickSound then
 		clickSound.PlaybackSpeed = math.random(95, 105) / 100

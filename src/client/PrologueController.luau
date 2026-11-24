@@ -37,22 +37,28 @@ local function buildDialogueUI(): (ScreenGui, TextLabel, TextButton)
 	label.Text = ""
 	label.Parent = gui
 
-	-- Skip button (top-right corner, subtle).
+	-- Skip button (top-right corner, matching dark-slate dossier style).
 	local skipBtn = Instance.new("TextButton")
 	skipBtn.Name = "SkipButton"
-	skipBtn.Size = UDim2.fromOffset(120, 36)
-	skipBtn.Position = UDim2.new(1, -140, 0, 20)
-	skipBtn.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-	skipBtn.BackgroundTransparency = 0.4
-	skipBtn.TextColor3 = Color3.fromRGB(180, 180, 180)
-	skipBtn.Font = Enum.Font.Gotham
-	skipBtn.TextSize = 15
-	skipBtn.Text = "Skip intro  ▶"
+	skipBtn.AnchorPoint = Vector2.new(1, 0)
+	skipBtn.Size = UDim2.fromOffset(112, 32)
+	skipBtn.Position = UDim2.new(1, -16, 0, 16)
+	skipBtn.BackgroundColor3 = Color3.fromRGB(14, 17, 16)
+	skipBtn.BackgroundTransparency = 0.16
+	skipBtn.TextColor3 = Color3.fromRGB(228, 198, 130)
+	skipBtn.Font = Enum.Font.GothamMedium
+	skipBtn.TextSize = 13
+	skipBtn.Text = "Skip omen"
 	skipBtn.Parent = gui
 
 	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 6)
+	corner.CornerRadius = UDim.new(0, 8)
 	corner.Parent = skipBtn
+
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = Color3.fromRGB(68, 76, 72)
+	stroke.Transparency = 0.3
+	stroke.Parent = skipBtn
 
 	return gui, label, skipBtn
 end

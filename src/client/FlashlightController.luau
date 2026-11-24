@@ -209,6 +209,10 @@ function FlashlightController.getBattery(): number
 	return battery
 end
 
+function FlashlightController.recharge(amount: number)
+	battery = math.clamp(battery + amount, 0, CONFIG.MAX_BATTERY)
+end
+
 -- ── Initialisation ──────────────────────────────────────────────────────────
 function FlashlightController.init()
 	Workspace:GetAttributeChangedSignal("ExpeditionNumber"):Connect(function()
@@ -240,7 +244,7 @@ function FlashlightController.init()
 
 	ensureTouchButton()
 
-	-- Wire server->client flicker request from NPCManager.
+	-- Wire server->client flicker request from NPCManager & cosmetic tint / battery gift hooks.
 	task.spawn(function()
 		local remotes = ReplicatedStorage:WaitForChild("FlashlightRemotes", 10)
 		if remotes then
@@ -248,6 +252,31 @@ function FlashlightController.init()
 			if flickerEv then
 				flickerEv.OnClientEvent:Connect(function(dur: number, intensity: number)
 					FlashlightController.triggerAnomalyFlicker(dur, intensity)
+				end)
+			end
+		end
+
+		local sharedFolder = ReplicatedStorage:FindFirstChild("Shared")
+		local catalogMod = sharedFolder and sharedFolder:FindFirstChild("ShopCatalog")
+		if catalogMod and catalogMod:IsA("ModuleScript") then
+			local catalog = require(catalogMod) :: { Tints: { [string]: { hotspotColor: Color3, spillColor: Color3 } } }
+			local function applyTint()
+				local tintId = player:GetAttribute("FlashlightTint")
+				local tint = if typeof(tintId) == "string" then catalog.Tints[tintId] else nil
+				if tint then
+					FlashlightOptics.setTint(primarySpot, warmSpill, tint.hotspotColor, tint.spillColor)
+				end
+			end
+			player:GetAttributeChangedSignal("FlashlightTint"):Connect(applyTint)
+			applyTint()
+		end
+
+		local shopRemotes = ReplicatedStorage:WaitForChild("ShopRemotes", 10)
+		if shopRemotes then
+			local giftEv = shopRemotes:WaitForChild("BatteryGiftReceived", 10) :: RemoteEvent?
+			if giftEv then
+				giftEv.OnClientEvent:Connect(function(amount: number)
+					FlashlightController.recharge(amount)
 				end)
 			end
 		end

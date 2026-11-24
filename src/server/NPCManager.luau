@@ -229,16 +229,20 @@ local function spawnStalker(room: Model, npcFolder: Folder)
 			return
 		end
 
-		-- Find nearest player.
+		-- Find nearest player (players with flashlights OFF are harder to detect in the dark).
 		local stalkerPos = stalker:GetPivot().Position
 		local nearestDist = math.huge
+		local nearestEffective = math.huge
 		local nearestPlayer: Player? = nil
 		for _, player in ipairs(Players:GetPlayers()) do
 			local char = player.Character
 			local hrp = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
 			if hrp and player:GetAttribute("DungeonEntered") and not player:GetAttribute("SittingOut") then
 				local d = (hrp.Position - stalkerPos).Magnitude
-				if d < nearestDist then
+				local lightMult = if player:GetAttribute("FlashlightOn") == true then 1 else 1.75
+				local effective = d * lightMult
+				if effective < nearestEffective then
+					nearestEffective = effective
 					nearestDist = d
 					nearestPlayer = player
 				end
@@ -258,10 +262,10 @@ local function spawnStalker(room: Model, npcFolder: Folder)
 				return
 			end
 		end
-		-- State transitions.
-		if nearestDist < CHASE_DETECT_RANGE then
+		-- State transitions (effective distance rewards turning off flashlight to hide).
+		if nearestEffective < CHASE_DETECT_RANGE then
 			state = "Chase"
-		elseif nearestDist < STALK_DETECT_RANGE then
+		elseif nearestEffective < STALK_DETECT_RANGE then
 			if state ~= "Chase" then
 				state = "Stalk"
 			end

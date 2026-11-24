@@ -49,4 +49,13 @@ function FlashlightOptics.setIntensity(hotspot: SpotLight?, spill: SpotLight?, i
 	end
 end
 
+function FlashlightOptics.setTint(hotspot: SpotLight?, spill: SpotLight?, hotspotColor: Color3, spillColor: Color3)
+	if hotspot then
+		hotspot.Color = hotspotColor
+	end
+	if spill then
+		spill.Color = spillColor
+	end
+end
+
 return FlashlightOptics

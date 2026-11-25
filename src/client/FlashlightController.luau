@@ -30,6 +30,7 @@ local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 
 local FlashlightOptics = require(script.Parent.FlashlightOptics)
+local HUDIcons = require(script.Parent.HUDIcons)
 local FlashlightController = {}
 
 -- ── Configuration (tweak all feel/visual values here) ────────────────────────
@@ -51,9 +52,10 @@ local CONFIG = {
 	SpillColor = Color3.fromRGB(235, 240, 255),
 	FillBrightness = 0.25,
 	FillRange = 10,
-	BeamLength = 14,
-	BeamWidth0 = 0.35,
-	BeamWidth1 = 5.5,
+	BeamLength = 12,
+	BeamWidth0 = 0.16,
+	BeamWidth1 = 3.2,
+	FirstPersonThreshold = 2.4,
 	MAX_BATTERY = 100,
 	DRAIN_RATE_PER_SEC = 0.5, -- ~200 s runtime
 	LOW_BATTERY_THRESHOLD = 15,
@@ -78,6 +80,7 @@ local spillLight: SpotLight? = nil
 local fillLight: PointLight? = nil
 local dustBeam: Beam? = nil
 local clickSound: Sound? = nil
+local syncDockVisual: ((boolean) -> ())? = nil
 
 local currentCFrame = CFrame.new()
 local swayTime = 0
@@ -147,25 +150,79 @@ local function createFlashlightEmitter(): (Part, SpotLight, SpotLight, PointLigh
 	return emitter, core, spill, fill, beam, sfx
 end
 
+local function styleFlashlightDock(btn: GuiButton)
+	btn.AnchorPoint = Vector2.new(1, 1)
+	btn.Size = UDim2.fromOffset(56, 56)
+	btn.Position = UDim2.new(1, -20, 1, -20)
+	btn.BackgroundColor3 = Color3.fromRGB(14, 17, 16)
+	btn.BackgroundTransparency = 0.14
+	if btn:IsA("TextButton") then
+		btn.Text = ""
+	end
+
+	for _, c in btn:GetChildren() do
+		if c:IsA("GuiObject") or c:IsA("UICorner") or c:IsA("UIStroke") then
+			c:Destroy()
+		end
+	end
+
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(1, 0)
+	corner.Parent = btn
+
+	local stroke = Instance.new("UIStroke")
+	stroke.Thickness = 1.5
+	stroke.Color = Color3.fromRGB(68, 76, 72)
+	stroke.Transparency = 0.25
+	stroke.Parent = btn
+
+	local icon, rays = HUDIcons.flashlight(btn, Color3.fromRGB(228, 198, 130), 26)
+	icon.AnchorPoint = Vector2.new(0.5, 0.5)
+	icon.Position = UDim2.fromScale(0.5, 0.48)
+
+	if not UserInputService.TouchEnabled then
+		local keycap = Instance.new("TextLabel")
+		keycap.AnchorPoint = Vector2.new(0.5, 1)
+		keycap.Position = UDim2.new(0.5, 0, 1, -3)
+		keycap.Size = UDim2.fromOffset(18, 13)
+		keycap.BackgroundColor3 = Color3.fromRGB(24, 28, 26)
+		keycap.Font = Enum.Font.GothamBold
+		keycap.TextSize = 9
+		keycap.TextColor3 = Color3.fromRGB(210, 206, 194)
+		keycap.Text = "F"
+		keycap.Parent = btn
+		local kc = Instance.new("UICorner")
+		kc.CornerRadius = UDim.new(0, 3)
+		kc.Parent = keycap
+	end
+
+	syncDockVisual = function(enabled: boolean)
+		stroke.Color = if enabled then Color3.fromRGB(228, 198, 130) else Color3.fromRGB(68, 76, 72)
+		stroke.Transparency = if enabled then 0.1 else 0.4
+		for _, r in rays do
+			r.Visible = enabled
+		end
+	end
+	syncDockVisual(isOn)
+end
+
 local function ensureTouchButton()
-	local hud = player.PlayerGui:FindFirstChild("GameHUD")
+	local playerGui = player:WaitForChild("PlayerGui") :: PlayerGui
+	local hud = playerGui:FindFirstChild("GameHUD")
 	if not hud and StarterGui:FindFirstChild("GameHUD") then
-		hud = player.PlayerGui:WaitForChild("GameHUD", 5)
+		hud = playerGui:WaitForChild("GameHUD", 5)
 	end
 	local authored = hud and hud:FindFirstChild("FlashlightButton")
 	if authored and authored:IsA("GuiButton") then
+		styleFlashlightDock(authored)
 		authored.Activated:Connect(function()
 			FlashlightController.toggle()
 		end)
 		return
 	end
 
-	if not UserInputService.TouchEnabled then
-		return
-	end
-
-	-- Clean up duplicate touch fallback if re-initialized
-	local oldFallback = player.PlayerGui:FindFirstChild("FlashlightHUD_Fallback")
+	-- Clean up duplicate dock if re-initialized
+	local oldFallback = playerGui:FindFirstChild("FlashlightHUD_Fallback")
 	if oldFallback then
 		oldFallback:Destroy()
 	end
@@ -174,33 +231,23 @@ local function ensureTouchButton()
 	gui.Name = "FlashlightHUD_Fallback"
 	gui.ResetOnSpawn = true
 	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-	gui.Parent = player.PlayerGui
+	gui.Parent = playerGui
 
 	local btn = Instance.new("TextButton")
 	btn.Name = "FlashlightButton"
-	btn.Size = UDim2.fromOffset(80, 80)
-	btn.Position = UDim2.new(1, -100, 1, -120)
-	btn.AnchorPoint = Vector2.new(1, 1)
-	btn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-	btn.BackgroundTransparency = 0.3
-	btn.Text = "🔦"
-	btn.TextSize = 32
-	btn.Font = Enum.Font.GothamBold
-	btn.TextColor3 = Color3.new(1, 1, 1)
 	btn.Parent = gui
-
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0.5, 0)
-	corner.Parent = btn
+	styleFlashlightDock(btn)
 
 	btn.Activated:Connect(function()
 		FlashlightController.toggle()
-		hapticPulse()
+		if UserInputService.TouchEnabled then
+			hapticPulse()
+		end
 	end)
 end
 
 -- ── Core API ─────────────────────────────────────────────────────────────────
-function FlashlightController.setLights(state: boolean)
+function FlashlightController.setLights(state: boolean, showBeam: boolean?)
 	if coreLight then
 		coreLight.Enabled = state
 	end
@@ -211,7 +258,7 @@ function FlashlightController.setLights(state: boolean)
 		fillLight.Enabled = state
 	end
 	if dustBeam then
-		dustBeam.Enabled = state
+		dustBeam.Enabled = state and (showBeam == true)
 	end
 end
 
@@ -222,6 +269,9 @@ function FlashlightController.setFlashlightState(state: boolean)
 	end
 	isOn = targetState
 	FlashlightController.setLights(isOn)
+	if syncDockVisual then
+		syncDockVisual(isOn)
+	end
 
 	if clickSound then
 		clickSound.PlaybackSpeed = math.random(95, 105) / 100
@@ -387,9 +437,11 @@ function FlashlightController.init()
 		swayTime += dt
 
 		local camera = Workspace.CurrentCamera
+		local inFirstPerson = true
 		if camera and emitterPart then
 			local character = player.Character
 			local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+			local head = character and character:FindFirstChild("Head")
 			local isMoving = humanoid ~= nil
 				and humanoid.MoveDirection.Magnitude > 0.1
 				and humanoid.FloorMaterial ~= Enum.Material.Air
@@ -403,21 +455,36 @@ function FlashlightController.init()
 			local walkX = math.cos(swayTime * CONFIG.WalkBobSpeed) * CONFIG.WalkBobAmount * walkBlend
 			local walkY = math.abs(math.sin(swayTime * CONFIG.WalkBobSpeed)) * -CONFIG.WalkBobAmount * walkBlend
 
-			local swayOffset = CFrame.new(idleX + walkX, idleY + walkY, -0.5)
-			local targetCFrame = camera.CFrame * swayOffset
+			local originCFrame = camera.CFrame
+			local rayOrigin = originCFrame.Position
+			local forwardOffset = -0.5
 
-			-- Prevent emitter from clipping into walls in Future lighting
+			if head and head:IsA("BasePart") then
+				local camDist = (camera.CFrame.Position - head.Position).Magnitude
+				if camDist >= CONFIG.FirstPersonThreshold then
+					-- In 3rd-person, originate beam ahead of the player's head so hair/torso never cast starburst shadows
+					inFirstPerson = false
+					local aimPos = head.Position + camera.CFrame.LookVector * 1.45 - Vector3.new(0, 0.1, 0)
+					originCFrame = CFrame.new(aimPos) * camera.CFrame.Rotation
+					rayOrigin = head.Position
+					forwardOffset = 0
+				end
+			end
+
+			local swayOffset = CFrame.new(idleX + walkX, idleY + walkY, forwardOffset)
+			local targetCFrame = originCFrame * swayOffset
+
+			-- Prevent emitter from clipping into walls in Realistic/Future lighting
 			local exclude: { Instance } = { emitterPart }
 			if character then
 				table.insert(exclude, character)
 			end
 			clipParams.FilterDescendantsInstances = exclude
-			local camPos = camera.CFrame.Position
-			local delta = targetCFrame.Position - camPos
+			local delta = targetCFrame.Position - rayOrigin
 			if delta.Magnitude > 0.01 then
-				local hit = Workspace:Raycast(camPos, delta, clipParams)
+				local hit = Workspace:Raycast(rayOrigin, delta, clipParams)
 				if hit then
-					local safePos = hit.Position - delta.Unit * 0.12
+					local safePos = hit.Position - delta.Unit * 0.14
 					targetCFrame = CFrame.new(safePos) * targetCFrame.Rotation
 				end
 			end
@@ -430,6 +497,10 @@ function FlashlightController.init()
 			end
 
 			emitterPart.CFrame = currentCFrame
+		end
+
+		if dustBeam then
+			dustBeam.Enabled = isOn and inFirstPerson
 		end
 
 		if isOn then

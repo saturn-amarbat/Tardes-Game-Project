@@ -60,7 +60,7 @@ function MonetizationService.init()
 			return
 		end
 		local owned = unlockedTints[player]
-		if owned and owned[tintId] then
+		if (owned and owned[tintId]) or tint.productId <= 0 then
 			player:SetAttribute("FlashlightTint", tintId)
 		elseif tint.productId > 0 then
 			MarketplaceService:PromptProductPurchase(player, tint.productId)

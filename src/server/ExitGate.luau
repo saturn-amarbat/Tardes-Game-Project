@@ -1,7 +1,8 @@
 --!strict
 local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
-local ObjectivePickups = require(script.Parent.ObjectivePickups)
+local InteractionRouter = require(script.Parent.InteractionRouter)
 
 local ExitGate = {}
 
@@ -18,21 +19,156 @@ function ExitGate.install(
 	local prompts: { ProximityPrompt } = {}
 	local holders: { [number]: Player? } = {}
 	local completed: { [number]: boolean } = {}
+	local leverLamps: { [number]: BasePart } = {}
 	local since: number? = nil
 	local open = false
 	local ready = false
 	local door = Workspace:FindFirstChild("ExitDoor")
-	local leaves: { [BasePart]: { collide: boolean, transparency: number } } = {}
+	local beacon: Part? = nil
+	local beaconLight: PointLight? = nil
+	if not door then
+		-- Build an authored-looking extraction bulkhead directly at lastRoom.Exit
+		local bulkhead = Instance.new("Model")
+		bulkhead.Name = "ExitDoor"
+		local frameCF = exit.CFrame
+
+		local function bPart(
+			name: string,
+			size: Vector3,
+			cf: CFrame,
+			color: Color3,
+			mat: Enum.Material,
+			collide: boolean
+		): Part
+			local p = Instance.new("Part")
+			p.Name = name
+			p.Size = size
+			p.CFrame = cf
+			p.Color = color
+			p.Material = mat
+			p.Anchored = true
+			p.CanCollide = collide
+			p.CanQuery = collide
+			p.CanTouch = false
+			p.TopSurface = Enum.SurfaceType.Smooth
+			p.BottomSurface = Enum.SurfaceType.Smooth
+			p.Parent = bulkhead
+			return p
+		end
+
+		local blastLeaf = bPart(
+			"BlastLeaf",
+			Vector3.new(6.8, 7.6, 0.6),
+			frameCF * CFrame.new(0, 0.3, 0),
+			Color3.fromRGB(48, 54, 52),
+			Enum.Material.DiamondPlate,
+			true
+		)
+		bPart(
+			"FrameLeft",
+			Vector3.new(0.9, 8.4, 1.2),
+			frameCF * CFrame.new(-3.8, 0.5, 0),
+			Color3.fromRGB(64, 52, 44),
+			Enum.Material.CorrodedMetal,
+			true
+		)
+		bPart(
+			"FrameRight",
+			Vector3.new(0.9, 8.4, 1.2),
+			frameCF * CFrame.new(3.8, 0.5, 0),
+			Color3.fromRGB(64, 52, 44),
+			Enum.Material.CorrodedMetal,
+			true
+		)
+		bPart(
+			"FrameTop",
+			Vector3.new(8.5, 0.9, 1.2),
+			frameCF * CFrame.new(0, 4.4, 0),
+			Color3.fromRGB(64, 52, 44),
+			Enum.Material.CorrodedMetal,
+			true
+		)
+		local bLightPart = bPart(
+			"StatusBeacon",
+			Vector3.new(0.8, 0.4, 0.4),
+			frameCF * CFrame.new(0, 3.8, -0.7),
+			Color3.fromRGB(205, 58, 48),
+			Enum.Material.Neon,
+			false
+		)
+		bLightPart.CastShadow = false
+		local bl = Instance.new("PointLight")
+		bl.Color = Color3.fromRGB(205, 58, 48)
+		bl.Range = 14
+		bl.Brightness = 1.1
+		bl.Shadows = false
+		bl.Parent = bLightPart
+		beacon = bLightPart
+		beaconLight = bl
+
+		-- Brass signage matching room station plates; Front (-Z) faces straight into lastRoom.
+		local plate = bPart(
+			"ExtractionPlate",
+			Vector3.new(3.4, 0.8, 0.12),
+			frameCF * CFrame.new(0, 5.25, -0.65),
+			Color3.fromRGB(166, 124, 66),
+			Enum.Material.Metal,
+			false
+		)
+		local gui = Instance.new("SurfaceGui")
+		gui.Face = Enum.NormalId.Front
+		gui.CanvasSize = Vector2.new(340, 80)
+		gui.LightInfluence = 0.6
+		gui.MaxDistance = 80
+		gui.Parent = plate
+		local label = Instance.new("TextLabel")
+		label.Size = UDim2.fromScale(1, 1)
+		label.BackgroundTransparency = 1
+		label.Font = Enum.Font.Code
+		label.TextColor3 = Color3.fromRGB(48, 38, 26)
+		label.TextScaled = false
+		label.TextSize = 36
+		label.Text = "EXTRACTION"
+		label.Parent = gui
+
+		-- Dust billows off the blast leaf when the bulkhead unseals.
+		local dust = Instance.new("ParticleEmitter")
+		dust.Name = "OpeningDust"
+		dust.Rate = 0
+		dust.Lifetime = NumberRange.new(1.2, 2.2)
+		dust.Speed = NumberRange.new(2, 6)
+		dust.SpreadAngle = Vector2.new(75, 75)
+		dust.Size = NumberSequence.new(0.4, 1.6)
+		dust.Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0.55),
+			NumberSequenceKeypoint.new(1, 1),
+		})
+		dust.Color = ColorSequence.new(Color3.fromRGB(140, 128, 108))
+		dust.Acceleration = Vector3.new(0, -1.5, 0)
+		dust.Parent = blastLeaf
+
+		bulkhead.PrimaryPart = blastLeaf
+		bulkhead.Parent = Workspace
+		door = bulkhead
+		table.insert(owned, bulkhead)
+	end
+	local leaves: { [BasePart]: { collide: boolean, transparency: number, cframe: CFrame } } = {}
+	local unregisters: { () -> () } = {}
 	local function remember(part: BasePart)
-		leaves[part] = { collide = part.CanCollide, transparency = part.Transparency }
+		leaves[part] = { collide = part.CanCollide, transparency = part.Transparency, cframe = part.CFrame }
 	end
 	if door then
 		if door:IsA("BasePart") then
 			remember(door)
 		end
-		for _, part in door:GetDescendants() do
-			if part:IsA("BasePart") then
-				remember(part)
+		local leaf = door:FindFirstChild("BlastLeaf")
+		if leaf and leaf:IsA("BasePart") then
+			remember(leaf)
+		elseif not leaf then
+			for _, part in door:GetDescendants() do
+				if part:IsA("BasePart") then
+					remember(part)
+				end
 			end
 		end
 	end
@@ -40,25 +176,21 @@ function ExitGate.install(
 	extract.Name = "EscapePrompt"
 	extract.ActionText = "Escape with squad"
 	extract.ObjectText = "Extraction"
-	extract.RequiresLineOfSight = false
+	extract.MaxActivationDistance = 8
+	extract.RequiresLineOfSight = true
 	extract.Enabled = false
-	extract.Parent = if door and door:IsA("BasePart")
-		then door
-		elseif door and door:IsA("Model") and door.PrimaryPart then door.PrimaryPart
-		else exit
-	local extractionPart = extract.Parent :: BasePart
+	extract.Parent = exit
 	table.insert(owned, extract)
 	table.insert(
-		connections,
-		extract.Triggered:Connect(function(player: Player)
-			if
-				open
-				and eligible(player)
-				and ObjectivePickups.inReach(player, extractionPart, extract.MaxActivationDistance)
-			then
-				escape()
-			end
-		end)
+		unregisters,
+		InteractionRouter.register(extract, {
+			targetPart = exit,
+			onTriggered = function(player: Player)
+				if open and eligible(player) then
+					escape()
+				end
+			end,
+		})
 	)
 
 	local function clear(index: number, player: Player)
@@ -68,10 +200,20 @@ function ExitGate.install(
 			since = nil
 		end
 	end
+	-- Held lamps glow green so teammates can see at a glance which lever is active.
+	local function refreshLamps()
+		for i, lampPart in leverLamps do
+			local target = if holders[i] ~= nil then Color3.fromRGB(82, 232, 128) else Color3.fromRGB(228, 162, 64)
+			if lampPart.Color ~= target then
+				lampPart.Color = target
+			end
+		end
+	end
 	local function update()
 		if open or not ready then
 			return
 		end
+		refreshLamps()
 		for i, player in holders do
 			if not player then
 				continue
@@ -83,7 +225,7 @@ function ExitGate.install(
 				or not part:IsA("BasePart")
 				or not p.Enabled
 				or not eligible(player)
-				or not ObjectivePickups.inReach(player, part, p.MaxActivationDistance)
+				or not InteractionRouter.isValidActor(player, part, p.MaxActivationDistance)
 			then
 				clear(i, player)
 			end
@@ -105,9 +247,28 @@ function ExitGate.install(
 		for _, p in prompts do
 			p.Enabled = false
 		end
-		for part in leaves do
+		for part, state in leaves do
 			part.CanCollide = false
-			part.Transparency = 1
+			TweenService:Create(
+				part,
+				TweenInfo.new(1.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+				{ CFrame = state.cframe * CFrame.new(0, 7.2, 0) }
+			):Play()
+		end
+		if beacon then
+			beacon.Color = Color3.fromRGB(82, 232, 128)
+		end
+		if beaconLight then
+			beaconLight.Color = Color3.fromRGB(82, 232, 128)
+		end
+		if door then
+			local leaf = door:FindFirstChild("BlastLeaf")
+			if leaf and leaf:IsA("BasePart") then
+				local em = leaf:FindFirstChild("OpeningDust")
+				if em and em:IsA("ParticleEmitter") then
+					em:Emit(40)
+				end
+			end
 		end
 		remotes:SetAttribute("ExitOpen", true)
 		local doorEvent = remotes:FindFirstChild("DoorUnlocked") :: RemoteEvent
@@ -117,18 +278,44 @@ function ExitGate.install(
 	for index, name in { "ExitLever_A", "ExitLever_B" } do
 		local part = Workspace:FindFirstChild(name)
 		if not part then
+			local sideOffset = if index == 1 then -4.2 else 4.2
+			-- Negative Z places both levers strictly inside lastRoom in front of BlastLeaf.
+			local baseCF = exit.CFrame * CFrame.new(sideOffset, -exit.Size.Y / 2 + 2.0, -2.2)
+
 			local hook = Instance.new("Part")
 			hook.Name = name
 			hook.Anchored = true
-			hook.CanCollide = false
-			hook.Size = Vector3.new(0.8, 2, 0.8)
-			hook.Material = Enum.Material.Neon
-			hook.Color = Color3.fromRGB(180, 130, 54)
-			hook.CFrame = exit.CFrame * CFrame.new(if index == 1 then -2 else 2, -exit.Size.Y / 2 + 2, 0)
+			hook.CanCollide = true
+			hook.Size = Vector3.new(1.0, 4.0, 1.0)
+			hook.Material = Enum.Material.CorrodedMetal
+			hook.Color = Color3.fromRGB(58, 62, 60)
+			hook.CFrame = baseCF
 			hook.Parent = Workspace
+
+			local handle = Instance.new("Part")
+			handle.Name = "LeverHandle"
+			handle.Anchored = true
+			handle.CanCollide = false
+			handle.Size = Vector3.new(0.22, 1.4, 0.22)
+			handle.Material = Enum.Material.Metal
+			handle.Color = Color3.fromRGB(190, 140, 56)
+			handle.CFrame = baseCF * CFrame.new(0, 0.8, -0.55) * CFrame.Angles(-0.45, 0, 0)
+			handle.Parent = hook
+
+			local lamp = Instance.new("Part")
+			lamp.Name = "LeverLamp"
+			lamp.Anchored = true
+			lamp.CanCollide = false
+			lamp.CastShadow = false
+			lamp.Size = Vector3.new(0.4, 0.25, 0.2)
+			lamp.Material = Enum.Material.Neon
+			lamp.Color = Color3.fromRGB(228, 162, 64)
+			lamp.CFrame = baseCF * CFrame.new(0, 1.65, -0.48)
+			lamp.Parent = hook
+			leverLamps[index] = lamp
+
 			part = hook
 			table.insert(owned, hook)
-			warn("[ExitGate] Runtime placeholder for Workspace." .. name)
 		end
 		if not part:IsA("BasePart") then
 			warn("[ExitGate] Expected BasePart: " .. name)
@@ -147,59 +334,53 @@ function ExitGate.install(
 			table.insert(owned, prompt)
 		end
 		prompt.Name = "Prompt"
-		prompt.ActionText = "Hold Lever"
-		prompt.ObjectText = name
-		prompt.HoldDuration = 3
+		prompt.ActionText = "Locked — Missing Keys/Fuses"
+		prompt.ObjectText = "Extraction lever " .. (if index == 1 then "A" else "B")
+		prompt.HoldDuration = 0
+		prompt.MaxActivationDistance = 7
 		prompt.RequiresLineOfSight = true
-		prompt.Enabled = false
+		prompt.Enabled = true
 		prompt.Parent = lever
 		prompts[index] = prompt
 		table.insert(
-			connections,
-			prompt.PromptButtonHoldBegan:Connect(function(player: Player)
-				if
-					not ready
-					or open
-					or holders[index]
-					or holders[3 - index] == player
-					or not eligible(player)
-					or not ObjectivePickups.inReach(player, lever, prompt.MaxActivationDistance)
-				then
-					return
-				end
-				holders[index] = player
-				update()
-			end)
-		)
-		-- HoldEnded also fires when the native progress ring fills. TriggerEnded
-		-- is the release after a completed hold; an early cancellation clears immediately.
-
-		table.insert(
-			connections,
-			prompt.Triggered:Connect(function(player: Player)
-				if holders[index] == player then
-					completed[index] = true
-					update()
-				end
-			end)
-		)
-		table.insert(
-			connections,
-			prompt.PromptButtonHoldEnded:Connect(function(player: Player)
-				-- Roblox sends HoldEnded immediately before Triggered on completion.
-				-- A cancelled hold never receives Triggered and cannot unlock.
-				task.delay(0.1, function()
-					if not completed[index] then
-						clear(index, player)
+			unregisters,
+			InteractionRouter.register(prompt, {
+				targetPart = lever,
+				onHoldBegan = function(player: Player)
+					if not ready or open or holders[index] or holders[3 - index] == player or not eligible(player) then
+						return
 					end
-				end)
-			end)
-		)
-		table.insert(
-			connections,
-			prompt.TriggerEnded:Connect(function(player: Player)
-				clear(index, player)
-			end)
+					holders[index] = player
+					update()
+				end,
+				onTriggered = function(player: Player)
+					if not ready then
+						local doorEvent = remotes:FindFirstChild("DoorUnlocked")
+						if doorEvent and doorEvent:IsA("RemoteEvent") then
+							doorEvent:FireClient(player, "Locked")
+						end
+						return
+					end
+					if holders[index] == player then
+						completed[index] = true
+						update()
+					end
+				end,
+				onHoldEnded = function(player: Player)
+					-- Roblox sends HoldEnded immediately before Triggered on completion.
+					task.delay(0.1, function()
+						if not completed[index] then
+							clear(index, player)
+						end
+					end)
+				end,
+				onTriggerEnded = function(player: Player)
+					clear(index, player)
+				end,
+				onPlayerLost = function(player: Player)
+					clear(index, player)
+				end,
+			})
 		)
 	end
 	table.insert(connections, RunService.Heartbeat:Connect(update))
@@ -207,26 +388,49 @@ function ExitGate.install(
 		arm = function()
 			ready = true
 			for _, p in prompts do
+				p.ActionText = "Hold to open bulkhead"
+				p.HoldDuration = 3
 				p.Enabled = true
+			end
+			refreshLamps()
+			-- Beacon traffic light: red = locked, amber = objectives complete, green = open.
+			if beacon then
+				beacon.Color = Color3.fromRGB(228, 162, 64)
+			end
+			if beaconLight then
+				beaconLight.Color = Color3.fromRGB(228, 162, 64)
 			end
 			remotes:SetAttribute("ObjectivesComplete", true)
 		end,
 		close = function()
 			ready = false
 			open = false
+			since = nil
 			extract.Enabled = false
 			for _, p in prompts do
 				p.Enabled = false
 			end
 			table.clear(holders)
+			table.clear(completed)
+			refreshLamps()
+			if beacon then
+				beacon.Color = Color3.fromRGB(205, 58, 48)
+			end
+			if beaconLight then
+				beaconLight.Color = Color3.fromRGB(205, 58, 48)
+			end
 		end,
 		destroy = function()
+			for _, unreg in unregisters do
+				unreg()
+			end
 			for _, conn in connections do
 				conn:Disconnect()
 			end
 			for part, state in leaves do
 				part.CanCollide = state.collide
 				part.Transparency = state.transparency
+				part.CFrame = state.cframe
 			end
 			for _, item in owned do
 				item:Destroy()

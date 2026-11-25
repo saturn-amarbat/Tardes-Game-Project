@@ -38,10 +38,10 @@ function SpectatorController.init()
 	local bar = Instance.new("Frame")
 	bar.Name = "SpectatorBar"
 	bar.AnchorPoint = Vector2.new(0.5, 1)
-	bar.Size = UDim2.fromOffset(360, 44)
+	bar.Size = UDim2.fromOffset(360, 40)
 	bar.Position = UDim2.new(0.5, 0, 1, -24)
-	bar.BackgroundColor3 = Color3.fromRGB(14, 14, 16)
-	bar.BackgroundTransparency = 0.2
+	bar.BackgroundColor3 = Color3.fromRGB(14, 17, 16)
+	bar.BackgroundTransparency = 0.14
 	bar.Parent = gui
 
 	local corner = Instance.new("UICorner")
@@ -49,35 +49,39 @@ function SpectatorController.init()
 	corner.Parent = bar
 
 	local stroke = Instance.new("UIStroke")
-	stroke.Color = Color3.fromRGB(110, 114, 120)
+	stroke.Color = Color3.fromRGB(68, 76, 72)
 	stroke.Thickness = 1
-	stroke.Transparency = 0.4
+	stroke.Transparency = 0.3
 	stroke.Parent = bar
 
 	local label = Instance.new("TextButton")
 	label.Size = UDim2.fromScale(1, 1)
 	label.BackgroundTransparency = 1
 	label.Font = Enum.Font.GothamMedium
-	label.TextSize = 14
-	label.TextColor3 = Color3.fromRGB(235, 232, 224)
+	label.TextSize = 13
+	label.TextColor3 = Color3.fromRGB(238, 234, 224)
 	label.Text = "Spectating"
 	label.Parent = bar
 
 	local reviveBtn = Instance.new("TextButton")
 	reviveBtn.Name = "ReviveTokenButton"
 	reviveBtn.AnchorPoint = Vector2.new(0.5, 1)
-	reviveBtn.Size = UDim2.fromOffset(220, 38)
-	reviveBtn.Position = UDim2.new(0.5, 0, 1, -76)
-	reviveBtn.BackgroundColor3 = Color3.fromRGB(48, 108, 66)
-	reviveBtn.TextColor3 = Color3.fromRGB(245, 248, 240)
+	reviveBtn.Size = UDim2.fromOffset(220, 36)
+	reviveBtn.Position = UDim2.new(0.5, 0, 1, -72)
+	reviveBtn.BackgroundColor3 = Color3.fromRGB(34, 68, 48)
+	reviveBtn.TextColor3 = Color3.fromRGB(238, 234, 224)
 	reviveBtn.Font = Enum.Font.GothamBold
-	reviveBtn.TextSize = 14
+	reviveBtn.TextSize = 13
 	reviveBtn.Text = "Use Revive Token (1 left)"
 	reviveBtn.Visible = false
 	reviveBtn.Parent = gui
 	local revCorner = Instance.new("UICorner")
 	revCorner.CornerRadius = UDim.new(0, 8)
 	revCorner.Parent = reviveBtn
+	local revStroke = Instance.new("UIStroke")
+	revStroke.Color = Color3.fromRGB(96, 186, 118)
+	revStroke.Transparency = 0.25
+	revStroke.Parent = reviveBtn
 
 	local index = 1
 	local matchRemotes = ReplicatedStorage:WaitForChild("MatchRemotes", 10)

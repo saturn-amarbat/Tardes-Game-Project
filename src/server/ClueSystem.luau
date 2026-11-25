@@ -19,7 +19,7 @@ local Workspace = game:GetService("Workspace")
 
 local ClueData = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ClueData"))
 
-local ObjectivePickups = require(script.Parent.ObjectivePickups)
+local InteractionRouter = require(script.Parent.InteractionRouter)
 local ClueSystem = {}
 
 -- ── Remotes ───────────────────────────────────────────────────────────────────
@@ -45,14 +45,36 @@ local function ensureFolder(parent: Instance, name: string): Folder
 	return created
 end
 
--- ── Graybox placeholder prop ──────────────────────────────────────────────────
+-- ── Grounded clue prop & surface raycast ────────────────────────────────────
+local function findSurfaceCFrame(room: Model): CFrame
+	local pivot = room:GetPivot()
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Include
+	params.FilterDescendantsInstances = { room }
+	params.RespectCanCollide = true
+
+	for _ = 1, 6 do
+		local x = math.random(-4, 4)
+		local z = math.random(-4, 4)
+		local probe = pivot.Position + Vector3.new(x, 6, z)
+		local hit = Workspace:Raycast(probe, -Vector3.yAxis * 14, params)
+		if hit and hit.Normal.Y > 0.85 then
+			return CFrame.new(hit.Position + Vector3.yAxis * 0.08)
+				* CFrame.Angles(math.pi / 2, math.random() * math.pi, 0)
+		end
+	end
+	return CFrame.new(pivot.Position + Vector3.new(0, 0.5, 0))
+end
+
 local function createGrayboxProp(clueCF: CFrame, clueName: string, parent: Instance): BasePart
 	local part = Instance.new("Part")
 	part.Name = "ClueProp_" .. clueName
-	part.Size = Vector3.new(0.5, 0.8, 0.05)
-	part.Color = Color3.fromRGB(220, 200, 160)
+	part.Size = Vector3.new(0.65, 0.85, 0.05)
+	part.Color = Color3.fromRGB(224, 208, 174)
+	part.Material = Enum.Material.SmoothPlastic
 	part.CFrame = clueCF
 	part.Anchored = true
+	part.CanCollide = false
 	part.Parent = parent
 	return part
 end
@@ -70,12 +92,24 @@ local function attachCluePrompt(
 		return
 	end
 
+	prop:SetAttribute("Collected", false)
+
+	local mount = prop:FindFirstChild("PromptMount")
+	if not mount or not mount:IsA("Attachment") then
+		local att = Instance.new("Attachment")
+		att.Name = "PromptMount"
+		att.Position = Vector3.new(0, 0.15, 0)
+		att.Parent = prop
+		mount = att
+	end
+
 	local prompt = Instance.new("ProximityPrompt")
 	prompt.ActionText = if entry.isWallScribble then "Read Writing" else "Pick Up"
 	prompt.ObjectText = entry.title
-	prompt.HoldDuration = 0.8
-	prompt.MaxActivationDistance = 6
-	prompt.Parent = prop
+	prompt.HoldDuration = 0.6
+	prompt.MaxActivationDistance = 7
+	prompt.RequiresLineOfSight = true
+	prompt.Parent = mount
 
 	-- Visual collected indicator (a small green PointLight).
 	local collectLight = Instance.new("PointLight")
@@ -85,25 +119,24 @@ local function attachCluePrompt(
 	collectLight.Enabled = false
 	collectLight.Parent = prop
 
-	prompt.Triggered:Connect(function(player: Player)
-		if
-			not prompt.Enabled
-			or clueFolder:FindFirstChild(entry.id)
-			or not ObjectivePickups.inReach(player, prop, prompt.MaxActivationDistance)
-		then
-			return
-		end
-		-- Mark collected server-side.
-		local marker = Instance.new("BoolValue")
-		marker.Name = entry.id
-		marker.Parent = clueFolder
+	InteractionRouter.register(prompt, {
+		targetPart = prop,
+		onTriggered = function()
+			if not prompt.Enabled or prop:GetAttribute("Collected") == true or clueFolder:FindFirstChild(entry.id) then
+				return
+			end
+			-- Lock immediately to prevent duplicate collection races.
+			prop:SetAttribute("Collected", true)
+			prompt.Enabled = false
 
-		prompt.Enabled = false
-		collectLight.Enabled = true
+			local marker = Instance.new("BoolValue")
+			marker.Name = entry.id
+			marker.Parent = clueFolder
 
-		-- Credit entire squad.
-		clueEvent:FireAllClients(entry)
-	end)
+			collectLight.Enabled = true
+			clueEvent:FireAllClients(entry)
+		end,
+	})
 end
 
 -- ── Public init ───────────────────────────────────────────────────────────────
@@ -148,8 +181,7 @@ function ClueSystem.init(rooms: { Model })
 			end
 		end
 
-		local pivot = room:GetPivot()
-		local clueCF = CFrame.new(pivot.Position + Vector3.new(math.random(-3, 3), 0.5, math.random(-3, 3)))
+		local clueCF = findSurfaceCFrame(room)
 		local prop = existingProp or createGrayboxProp(clueCF, entry.id, room)
 
 		attachCluePrompt(prop :: BasePart, entry, clueEvent, clueFolder)

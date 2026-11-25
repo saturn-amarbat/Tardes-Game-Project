@@ -59,9 +59,10 @@ To prevent data loss, conflicts, and sync desynchronization:
 
 ## Current Baseline & Team Split
 
-- **Start from `origin/main`.** It contains the playable co-op run, the Blackpine survey galleries, and the cottage reveal. Create short-lived feature branches from this shared baseline.
-- **Opening flow.** Find the brass kitchen key, unlock the hinged cellar hatch, and follow the pipe rail down to the concourse. At the lift, the first pull restores power for the whole squad and starts the load recorder. The next interaction boards each player individually.
-- **Team Create.** Use the shared Project Horror place for the authored room templates, NPC rigs, and lighting. Git tracks the opening model and the scripts that dress it at runtime.
+- **Current Baseline:** `main` at `fa845b6` (Roblox Studio Team Create **version `46`**). Create short-lived feature branches from `origin/main`.
+- **Opening flow.** Follow the amber survey stakes past the roadside deer omen (`DeerIntroRig`) to the Warden's Cottage. Find the brass kitchen key, unlock the hinged cellar hatch, and follow the pipe rail down to the concourse. At the survey lift, the first pull restores power for the whole squad (`SurveyRelay`); the next interaction boards each player individually.
+- **Dungeon Loop & Extraction.** Survive `10` procedurally snapped rooms (including a mid-run `ToadMakerSafeRoom` breather), gather clues/objectives + Run Scrap, and coordinate `ExitLever_A` / `ExitLever_B` (with 1 survivor fallback) to open the steel extraction bulkhead.
+- **Team Create.** Use the shared Project Horror place for authored room templates, NPC rigs, and `Realistic` lighting. Git tracks the opening model (`Opening.rbxmx`) and all Luau scripts under `src/`.
 - **Team Responsibilities**:
   - **Technical Lead**: Owns `src/` (Luau codebase) via Rojo + Git, enforcing `--!strict`, modular services/controllers, and CI checks (`stylua`, `selene`).
   - **Creative Lead**: Owns 3D geometry, environment art, [src/server/ForestCabin/Opening.rbxmx](file:///c:/Users/sanch/Projects/horror-game/src/server/ForestCabin/Opening.rbxmx), `ReplicatedStorage/RoomTemplates`, `ReplicatedStorage/NPCModels`, `Lighting`, audio instances, and raw UI layout in Team Create.
@@ -74,8 +75,11 @@ Detailed specifications, design documentation, and architectural guidelines are 
 
 - [GAME_SPEC.md](file:///c:/Users/sanch/Projects/horror-game/GAME_SPEC.md) – **Canonical Single Source of Truth** (core loop, multiplayer/revive rules, Toad-Maker safe room, NPC contracts, and v1 launch scope).
 - [AGENTS.md](file:///c:/Users/sanch/Projects/horror-game/AGENTS.md) – Strict tool boundaries, role splits, and development constraints.
-- [docs/MILESTONES_AND_CHECKINS.md](file:///c:/Users/sanch/Projects/horror-game/docs/MILESTONES_AND_CHECKINS.md) – Milestone gates and recurring 4-point progress check-in plan.
+- [docs/DECISIONS_AND_CHANGELOG.md](file:///c:/Users/sanch/Projects/horror-game/docs/DECISIONS_AND_CHANGELOG.md) – **Architectural Decision Records & Engineering Log** (what changed and *why* each decision was made).
+- [docs/MILESTONES_AND_CHECKINS.md](file:///c:/Users/sanch/Projects/horror-game/docs/MILESTONES_AND_CHECKINS.md) – Milestone gates, check-in protocol, and current progress tracker.
 - [docs/GAME_DESIGN_AND_RESEARCH.md](file:///c:/Users/sanch/Projects/horror-game/docs/GAME_DESIGN_AND_RESEARCH.md) – Core gameplay loop, story beats, horror research, co-op scaling, monetization/retention, and proposed roadmap.
 - [docs/ARCHITECTURE_AND_WORKFLOW.md](file:///c:/Users/sanch/Projects/horror-game/docs/ARCHITECTURE_AND_WORKFLOW.md) – Client/Server/Shared module map, Rojo sync rules, `StreamingEnabled` safety, input contracts, and Git branch workflows.
 - [docs/STUDIO_ASSET_SPEC.md](file:///c:/Users/sanch/Projects/horror-game/docs/STUDIO_ASSET_SPEC.md) – Studio instance names, anchor contracts, streaming configurations, audio hooks, and UI button hierarchy.
+- [docs/blackpine-survey-works.md](file:///c:/Users/sanch/Projects/horror-game/docs/blackpine-survey-works.md) – Bunker survey gallery environment art pass & `SurveyMount` handoff.
+- [docs/milestone-3-release.md](file:///c:/Users/sanch/Projects/horror-game/docs/milestone-3-release.md) – Milestone 3 test record & extraction notes.
 - [docs/forest-cabin-handoff.md](file:///c:/Users/sanch/Projects/horror-game/docs/forest-cabin-handoff.md) – Historical environment handoff document for the Blackpine Forest and cabin opening.

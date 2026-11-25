@@ -63,7 +63,7 @@ function Fittings.plate(p: Part, words: string)
 	text.BackgroundTransparency = 1
 	text.Font = Enum.Font.Code
 	text.TextColor3 = Fittings.paper
-	text.TextScaled = true
+	text.TextSize = 36
 	text.Text = words
 	text.Parent = gui
 end

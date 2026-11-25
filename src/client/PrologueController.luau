@@ -9,7 +9,7 @@ local Workspace = game:GetService("Workspace")
 local Typography = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Typography"))
 
 local player = Players.LocalPlayer
-local playerGui = player.PlayerGui
+local playerGui = player:WaitForChild("PlayerGui") :: PlayerGui
 
 -- ── Build the dialogue / guidance UI ─────────────────────────────────────────
 local function buildDialogueUI(): (ScreenGui, TextLabel, TextButton)

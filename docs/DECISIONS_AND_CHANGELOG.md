@@ -2,7 +2,7 @@
 
 This document records the major implementation steps completed on **Tardes**, the bugs or constraints observed during development and playtesting, and **why** each architectural decision was made.
 
-Current verified baseline: **`main` at `fa845b6`** (Roblox Studio Team Create **version `46`**).
+Current verified baseline: **`main` at `24f25b3`** (+ Studio Atmosphere, Lobby & Audit Fixes synced).
 
 ---
 
@@ -51,6 +51,13 @@ Current verified baseline: **`main` at `fa845b6`** (Roblox Studio Team Create **
   - Instrument all 9 progression stages via [src/server/FunnelAnalytics.luau](file:///c:/Users/sanch/Projects/horror-game/src/server/FunnelAnalytics.luau).
 - **Why:** Eliminated teammates previously had no camera feedback, `ExitGate` previously rendered glowing floating blocks without a physical door, and launch readiness requires non-pay-to-win cosmetic/social monetization plus measurable player drop-off telemetry.
 
+### ADR-09: Inward Doorway Anchor Convention, Client Lamp Flicker & Opening Sync
+- **Decision:**
+  1. Document and enforce the true `RoomTemplates` anchor convention in [src/server/RoomGenerator.luau](file:///c:/Users/sanch/Projects/horror-game/src/server/RoomGenerator.luau) and [src/server/ExitGate.luau](file:///c:/Users/sanch/Projects/horror-game/src/server/ExitGate.luau): both `Entrance.LookVector` and `Exit.LookVector` (`-Z_local`) point **into** their room, so interior hardware (`PassageLamp`, non-colliding `DoorCasing`/`StationPlate`, `ExtractionPlate` with `Face = Front`, `StatusBeacon`, `ExitLever_A`/`ExitLever_B` handles & lamps) sits on negative local `Z` while keeping the `targetEntranceCF = prevExitCF * Angles(0, pi, 0)` room-chaining math unchanged.
+  2. Move Studio-only `LampFlicker` into [src/client/LampFlicker.luau](file:///c:/Users/sanch/Projects/horror-game/src/client/LampFlicker.luau) (gating structural metallic groans strictly to `DungeonEntered == true`), move `ExpeditionBoard` sync into [src/server/ForestCabin/init.server.luau](file:///c:/Users/sanch/Projects/horror-game/src/server/ForestCabin/init.server.luau) reading `ReplicatedStorage.MatchRemotes:GetAttribute("RunState")`, fix `Player:WaitForChild("PlayerGui")` startup races in HUD/UI controllers, and merge `ExitDoor` bulkhead audio feedback into [src/client/ObjectiveHUD.luau](file:///c:/Users/sanch/Projects/horror-game/src/client/ObjectiveHUD.luau).
+  3. Clean sky-floating/duplicate pass-1 lobby props from Studio `Opening`, fix inverted `SurfaceGui.Face` directions, disable dynamic campfire shadows, replace `TextScaled` with crisp fixed `TextSize`, and serialize `HauntDressing` + `LobbyDressing` into [src/server/ForestCabin/Opening.rbxmx](file:///c:/Users/sanch/Projects/horror-game/src/server/ForestCabin/Opening.rbxmx).
+- **Why:** Reconciles Studio Team Create `v56`–`v58` atmosphere and lobby dressing cleanly back into Rojo/Git without script drift while fixing critical orientation, `PlayerGui` startup race, shadow-budget flicker, and forest groan leakage bugs.
+
 ---
 
 ## Chronological Implementation History
@@ -71,4 +78,5 @@ Current verified baseline: **`main` at `fa845b6`** (Roblox Studio Team Create **
 | `fa845b6` | M3 Interactions & Layout | Added `InteractionRouter` (`ProximityPromptService`), `RoomGenerator` turn-direction banning, `ClueSystem` surface raycasts + `PromptMount` `Attachment`s, `ExitGate` locked feedback + `BlastLeaf` tween, and positioned `DeerIntroRig` on the Blackpine trail (`Team Create v46`). |
 | `315198e` | Visual & UX Polish | Added `HorrorFeedback` (Stalker heartbeat vignette, `HorrorTerrorGrade`, chase tremor via `CameraOffset`, sanctuary badge), `SprintController` (`14 -> 22` WalkSpeed + stamina bar + FOV kick), `FieldJournal` (`[J]` lore archive, flashlight tint switcher, squad support), and dressed `ToadMakerSafeRoom` architecture. |
 | `fb77272` | Tasteful HUD & Icons | Created `HUDIcons.luau` geometric vector icon primitives and redesigned `ObjectiveHUD`, `FieldJournal`, `FlashlightController` circular dock (`[F]` keycap + ray state), `SprintController`, `PrologueController`, and `SpectatorController` around a unified 1970s Blackpine field-dossier palette. |
-| `HEAD` | Horror Typography | Created `Typography.luau` (`Fondamento` calligraphy, `Creepster` wall scribbles, `Antique` narrative, `Code` industrial stencils, `Gotham*` live HUD), added `"THE LOWER GALLERIES"` arrival title, eliminated `TextScaled` thrashing on `SurfaceGui` signs, and wired clean forest-to-bunker title clears. |
+| `24f25b3` | Horror Typography | Created `Typography.luau` (`Fondamento` calligraphy, `Creepster` wall scribbles, `Antique` narrative, `Code` industrial stencils, `Gotham*` live HUD), added `"THE LOWER GALLERIES"` arrival title, eliminated `TextScaled` thrashing on `SurfaceGui` signs, and wired clean forest-to-bunker title clears. |
+| `HEAD` | Atmosphere & Audit Sync | Reconciled Studio `v56`–`v58` cottage `HauntDressing`, lobby `LobbyDressing`, dungeon casings/passage lamps, and `ExitGate` polish into Git/Rojo; fixed `PlayerGui` startup races (`WaitForChild`), inverted doorway/signboard orientations (`-Z` interior offsets & `ExitLever` placement), `RunState` board container, shadow/audio leaks, and `TextScaled` font usage. |

@@ -3,23 +3,24 @@
   FRONT-FACE SNAPPING RULE (read before editing anchor placement):
   ─────────────────────────────────────────────────────────────────
   Every room template stores two transparent anchor Parts:
-    • Entrance  – sits at the room's entry doorway, LookVector pointing
-                  OUT of the room (away from interior, i.e. –Z in model space).
-    • Exit      – sits at the room's exit doorway, LookVector pointing
-                  OUT of the room (into the corridor ahead, i.e. +Z in model
-                  space for straight rooms, rotated for L-shapes).
+    • Entrance  – sits at the room's entry doorway (-Z in model space),
+                  LookVector (-Z_local) pointing INTO the room (+Z_model).
+    • Exit      – sits at the room's exit doorway (+Z in model space),
+                  LookVector (-Z_local) pointing INTO the room (-Z_model for
+                  straight rooms, rotated for L-shapes).
+
+  Consequently, for BOTH Entrance and Exit anchors:
+    • anchor.CFrame * CFrame.new(x, y, -d) is INSIDE the room.
+    • anchor.CFrame * CFrame.new(x, y, +d) is OUTSIDE the room.
 
   Snap algorithm (do NOT change the sign or rotation):
-    1. The previous room's Exit CFrame faces outward → its LookVector
-       points in the direction the next room should continue.
-    2. We want the new room's Entrance to face that same outward direction
-       (they are back-to-back), so we flip the Exit CFrame 180 ° around Y:
+    1. Flip the previous room's inward-facing Exit CFrame 180° around Y so its
+       LookVector points outward in the direction the next room continues:
            targetEntranceCF = prevExitCF * CFrame.Angles(0, math.pi, 0)
-    3. Compute the offset from the room's pivot to its Entrance in local space,
+    2. Compute the offset from the room's pivot to its Entrance in local space,
        then solve for the new pivot that places Entrance at targetEntranceCF:
            newPivot = targetEntranceCF * entranceLocal:Inverse()
-    4. PivotTo(newPivot) moves the whole model so Entrance aligns exactly.
-  This guarantees rooms always connect face-to-face and never spawn backwards.
+    3. PivotTo(newPivot) moves the whole model so Entrance aligns cleanly.
 ]]
 
 local Workspace = game:GetService("Workspace")
@@ -54,6 +55,149 @@ local function getRoomTurnSign(entrance: BasePart, exit: BasePart): number
 		return -1 -- Right turn
 	end
 	return 0
+end
+
+-- Amber passage lamps echo the forest trail stakes: follow the amber light deeper.
+-- Both Entrance and Exit LookVectors point INTO the room (-Z_local faces interior).
+local function addPassageLamp(room: Model, exitAnchor: BasePart)
+	local lamp = Instance.new("Part")
+	lamp.Name = "PassageLamp"
+	lamp.Anchored = true
+	lamp.CanCollide = false
+	lamp.CanQuery = false
+	lamp.CanTouch = false
+	lamp.CastShadow = false
+	lamp.Size = Vector3.new(0.9, 0.22, 0.22)
+	lamp.Material = Enum.Material.Neon
+	lamp.Color = Color3.fromRGB(245, 189, 103)
+	-- Positioned above ConduitRun and ExitGate ExtractionPlate without touching ceiling ribs.
+	lamp.CFrame = exitAnchor.CFrame * CFrame.new(0, exitAnchor.Size.Y / 2 + 2.45, -0.9)
+
+	-- Corroded mount bracket between the neon tube and the exit bulkhead header.
+	local bracket = Instance.new("Part")
+	bracket.Name = "LampBracket"
+	bracket.Anchored = true
+	bracket.CanCollide = false
+	bracket.CanQuery = false
+	bracket.CanTouch = false
+	bracket.Size = Vector3.new(1.3, 0.48, 0.28)
+	bracket.Color = Color3.fromRGB(45, 40, 35)
+	bracket.Material = Enum.Material.CorrodedMetal
+	bracket.CFrame = lamp.CFrame * CFrame.new(0, 0, 0.16)
+	bracket.Parent = room
+
+	lamp.Parent = room
+	local glow = Instance.new("PointLight")
+	glow.Color = lamp.Color
+	glow.Range = 12
+	glow.Brightness = 0.6
+	glow.Shadows = false
+	glow.Parent = lamp
+end
+
+-- Non-colliding iron door casings and brass station plates frame each threshold
+-- cleanly inside the room so neither players nor MainNPC_Stalker ever snag.
+local function addDoorFrame(room: Model, anchor: BasePart, labelText: string?)
+	local casing = Instance.new("Model")
+	casing.Name = "DoorCasing"
+	local iron = Color3.fromRGB(64, 58, 50)
+	local brass = Color3.fromRGB(166, 124, 66)
+
+	local function trim(name: string, size: Vector3, offset: CFrame): Part
+		local p = Instance.new("Part")
+		p.Name = name
+		p.Anchored = true
+		p.CanCollide = false
+		p.CanQuery = false
+		p.CanTouch = false
+		p.TopSurface = Enum.SurfaceType.Smooth
+		p.BottomSurface = Enum.SurfaceType.Smooth
+		p.Size = size
+		p.Color = iron
+		p.Material = Enum.Material.CorrodedMetal
+		p.CFrame = anchor.CFrame * offset
+		p.Parent = casing
+		return p
+	end
+
+	-- Negative Z sits strictly inside this room, leaving a zero-overlap seam at Z = 0.
+	trim("CasingJambL", Vector3.new(0.5, 7, 1.1), CFrame.new(-2.35, 0, -0.55))
+	trim("CasingJambR", Vector3.new(0.5, 7, 1.1), CFrame.new(2.35, 0, -0.55))
+	trim("CasingHeader", Vector3.new(5.2, 0.6, 1.1), CFrame.new(0, 3.8, -0.55))
+
+	local sill = trim("CasingSill", Vector3.new(4.6, 0.12, 1.2), CFrame.new(0, -anchor.Size.Y / 2 + 0.06, -0.55))
+	sill.Material = Enum.Material.DiamondPlate
+	sill.Color = Color3.fromRGB(52, 48, 44)
+
+	local conduit = trim("ConduitRun", Vector3.new(5.2, 0.28, 0.28), CFrame.new(0, 5.05, -0.55))
+	conduit.Color = Color3.fromRGB(38, 34, 30)
+
+	if labelText then
+		local plate = trim("StationPlate", Vector3.new(2.1, 0.62, 0.1), CFrame.new(0, 4.55, -1.15))
+		plate.Color = brass
+		plate.Material = Enum.Material.Metal
+		local gui = Instance.new("SurfaceGui")
+		gui.Face = Enum.NormalId.Front
+		gui.CanvasSize = Vector2.new(210, 62)
+		gui.LightInfluence = 0.6
+		gui.MaxDistance = 60
+		gui.Parent = plate
+		local label = Instance.new("TextLabel")
+		label.Size = UDim2.fromScale(1, 1)
+		label.BackgroundTransparency = 1
+		label.Font = Enum.Font.Code
+		label.TextColor3 = Color3.fromRGB(48, 38, 26)
+		label.TextScaled = false
+		label.TextSize = 22
+		label.Text = labelText
+		label.Parent = gui
+	end
+	casing.Parent = room
+end
+
+-- Drifting dust motes catch flashlight beams and a subtle low hum anchors each gallery.
+local function addRoomAtmosphere(room: Model)
+	local cf, size = room:GetBoundingBox()
+	local volume = Instance.new("Part")
+	volume.Name = "RoomAtmosphere"
+	volume.Anchored = true
+	volume.CanCollide = false
+	volume.CanQuery = false
+	volume.CanTouch = false
+	volume.Transparency = 1
+	volume.Size = Vector3.new(math.max(size.X - 3, 4), 7, math.max(size.Z - 3, 4))
+	volume.CFrame = cf
+	volume.Parent = room
+
+	local dust = Instance.new("ParticleEmitter")
+	dust.Name = "DustMotes"
+	dust.Rate = 9
+	dust.Lifetime = NumberRange.new(6, 10)
+	dust.Speed = NumberRange.new(0.1, 0.35)
+	dust.SpreadAngle = Vector2.new(180, 180)
+	dust.RotSpeed = NumberRange.new(-20, 20)
+	dust.Size = NumberSequence.new(0.06, 0.16)
+	dust.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 1),
+		NumberSequenceKeypoint.new(0.15, 0.72),
+		NumberSequenceKeypoint.new(0.85, 0.78),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	dust.Color = ColorSequence.new(Color3.fromRGB(214, 200, 178))
+	dust.LightEmission = 0.2
+	dust.Acceleration = Vector3.new(0, -0.05, 0)
+	dust.Parent = volume
+
+	local tone = Instance.new("Sound")
+	tone.Name = "RoomTone"
+	tone.SoundId = "rbxassetid://273398061"
+	tone.Looped = true
+	tone.Volume = 0.22
+	tone.RollOffMode = Enum.RollOffMode.InverseTapered
+	tone.RollOffMinDistance = 10
+	tone.RollOffMaxDistance = 90
+	tone.Parent = volume
+	tone:Play()
 end
 
 local function buildSafeRoomTemplate(): Model
@@ -254,6 +398,12 @@ function RoomGenerator.generate(numRooms: number): { Model }
 			end
 
 			if solidOverlaps == 0 then
+				addPassageLamp(candidate, exit)
+				addDoorFrame(candidate, entrance, string.format("STATION %02d", roomIndex))
+				if roomIndex < numRooms then
+					addDoorFrame(candidate, exit, string.format("STATION %02d", roomIndex + 1))
+				end
+				addRoomAtmosphere(candidate)
 				candidate.Parent = dungeonFolder
 				table.insert(spawnedRooms, candidate)
 				currentExitCF = exit.CFrame

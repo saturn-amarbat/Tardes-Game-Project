@@ -1,5 +1,6 @@
 --!strict
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 local teleportModule = script.Parent:FindFirstChild("TeleportManager")
 local TeleportManager = if teleportModule and teleportModule:IsA("ModuleScript") then require(teleportModule) else nil
@@ -183,6 +184,52 @@ end)
 
 opening.Name = "ForestCabinOpening"
 opening.Parent = Workspace
+
+-- Keep the lobby expedition log board synchronized with MatchRemotes + Workspace attributes.
+do
+	local lobby = opening:FindFirstChild("LobbyDressing")
+	local board = if lobby then lobby:FindFirstChild("ExpeditionBoard") else nil
+	local panel = if board then board:FindFirstChild("BoardPanel") else nil
+	local gui = if panel then panel:FindFirstChildOfClass("SurfaceGui") else nil
+	local numberInst = if gui then gui:FindFirstChild("NumberLabel") else nil
+	local stepInst = if gui then gui:FindFirstChild("StepLabel") else nil
+	if numberInst and numberInst:IsA("TextLabel") and stepInst and stepInst:IsA("TextLabel") then
+		local numberLabel = numberInst
+		local stepLabel = stepInst
+		local STEP_TEXT = {
+			FindKey = "Recover the cellar key",
+			UnlockHatch = "Unlock the cellar hatch",
+			FindLift = "Descend to the survey vault",
+			BoardLift = "Board the lift",
+		}
+		local function refreshBoard()
+			local expNum = Workspace:GetAttribute("ExpeditionNumber")
+			numberLabel.Text = string.format("EXPEDITION #%d", if typeof(expNum) == "number" then expNum else 1)
+
+			local matchRemotes = ReplicatedStorage:FindFirstChild("MatchRemotes")
+			local runState = if matchRemotes then matchRemotes:GetAttribute("RunState") else nil
+			local step = Workspace:GetAttribute("BlackpineOpeningStep")
+			if runState == "Active" then
+				stepLabel.Text = "Survey underway — good luck"
+			elseif typeof(step) == "string" and STEP_TEXT[step] then
+				stepLabel.Text = STEP_TEXT[step]
+			else
+				stepLabel.Text = "Awaiting deployment"
+			end
+		end
+		Workspace:GetAttributeChangedSignal("ExpeditionNumber"):Connect(refreshBoard)
+		Workspace:GetAttributeChangedSignal("BlackpineOpeningStep"):Connect(refreshBoard)
+		task.spawn(function()
+			local matchRemotes = ReplicatedStorage:WaitForChild("MatchRemotes", 15)
+			if matchRemotes then
+				matchRemotes:GetAttributeChangedSignal("RunState"):Connect(refreshBoard)
+				refreshBoard()
+			end
+		end)
+		refreshBoard()
+	end
+end
+
 local function assignStart(player: Player)
 	player.RespawnLocation = start
 end

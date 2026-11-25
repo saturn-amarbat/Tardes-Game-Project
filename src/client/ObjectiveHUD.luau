@@ -12,6 +12,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
+local Workspace = game:GetService("Workspace")
 
 local FlashlightController = require(script.Parent.FlashlightController)
 local HUDIcons = require(script.Parent.HUDIcons)
@@ -19,7 +20,7 @@ local SprintController = require(script.Parent.SprintController)
 local Typography = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Typography"))
 
 local player = Players.LocalPlayer
-local playerGui = player.PlayerGui
+local playerGui = player:WaitForChild("PlayerGui") :: PlayerGui
 
 local existingHud = playerGui:FindFirstChild("ObjectiveHUD")
 if existingHud then
@@ -516,14 +517,54 @@ local function init()
 				flashLabel.TextColor3 = Color3.fromRGB(240, 118, 92)
 				flashLabel.Text = "Locked — Missing Keys/Fuses"
 				flashLabel.TextTransparency = 0
+				-- Dull denial beep, pitched low so it reads as a dead mechanism.
+				local deny = Instance.new("Sound")
+				deny.SoundId = "rbxasset://sounds/electronicpingshort.wav"
+				deny.Volume = 0.4
+				deny.PlaybackSpeed = 0.55
+				deny.Parent = gui
+				deny:Play()
+				deny.Ended:Once(function()
+					deny:Destroy()
+				end)
 				task.delay(2.5, function()
 					if flashLabel.Text == "Locked — Missing Keys/Fuses" then
-						flashLabel.TextColor3 = Color3.fromRGB(118, 224, 152)
+						flashLabel.TextColor3 = Typography.Colors.MintClear
 						refreshProgress()
 					end
 				end)
+			elseif status == "ExitDoor" then
+				flashLabel.TextColor3 = Typography.Colors.MintClear
+				flashLabel.Text = "Bulkhead unsealed — escape!"
+				flashLabel.TextTransparency = 0
+				-- Heavy metal groan as the bulkhead grinds open from the extraction gate.
+				local doorInst = Workspace:FindFirstChild("ExitDoor")
+				local host: BasePart? = nil
+				if doorInst then
+					if doorInst:IsA("BasePart") then
+						host = doorInst
+					else
+						local leaf = doorInst:FindFirstChild("BlastLeaf")
+						if leaf and leaf:IsA("BasePart") then
+							host = leaf
+						end
+					end
+				end
+				if host then
+					local grind = Instance.new("Sound")
+					grind.SoundId = "rbxassetid://9116638401"
+					grind.Volume = 0.8
+					grind.PlaybackSpeed = 0.45
+					grind.RollOffMode = Enum.RollOffMode.InverseTapered
+					grind.RollOffMaxDistance = 250
+					grind.Parent = host
+					grind:Play()
+					grind.Ended:Once(function()
+						grind:Destroy()
+					end)
+				end
 			else
-				flashLabel.TextColor3 = Color3.fromRGB(118, 224, 152)
+				flashLabel.TextColor3 = Typography.Colors.MintClear
 			end
 		end)
 	end

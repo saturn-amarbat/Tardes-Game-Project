@@ -207,9 +207,10 @@ local function styleFlashlightDock(btn: GuiButton)
 end
 
 local function ensureTouchButton()
-	local hud = player.PlayerGui:FindFirstChild("GameHUD")
+	local playerGui = player:WaitForChild("PlayerGui") :: PlayerGui
+	local hud = playerGui:FindFirstChild("GameHUD")
 	if not hud and StarterGui:FindFirstChild("GameHUD") then
-		hud = player.PlayerGui:WaitForChild("GameHUD", 5)
+		hud = playerGui:WaitForChild("GameHUD", 5)
 	end
 	local authored = hud and hud:FindFirstChild("FlashlightButton")
 	if authored and authored:IsA("GuiButton") then
@@ -221,7 +222,7 @@ local function ensureTouchButton()
 	end
 
 	-- Clean up duplicate dock if re-initialized
-	local oldFallback = player.PlayerGui:FindFirstChild("FlashlightHUD_Fallback")
+	local oldFallback = playerGui:FindFirstChild("FlashlightHUD_Fallback")
 	if oldFallback then
 		oldFallback:Destroy()
 	end
@@ -230,7 +231,7 @@ local function ensureTouchButton()
 	gui.Name = "FlashlightHUD_Fallback"
 	gui.ResetOnSpawn = true
 	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-	gui.Parent = player.PlayerGui
+	gui.Parent = playerGui
 
 	local btn = Instance.new("TextButton")
 	btn.Name = "FlashlightButton"

@@ -7,6 +7,7 @@ require(script.SpectatorController).init()
 require(script.SprintController).init()
 require(script.HorrorFeedback).init()
 require(script.FieldJournal).init()
+require(script.LampFlicker).init()
 
 FlashlightController.init()
 

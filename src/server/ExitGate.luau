@@ -19,6 +19,7 @@ function ExitGate.install(
 	local prompts: { ProximityPrompt } = {}
 	local holders: { [number]: Player? } = {}
 	local completed: { [number]: boolean } = {}
+	local leverLamps: { [number]: BasePart } = {}
 	local since: number? = nil
 	local open = false
 	local ready = false
@@ -90,11 +91,12 @@ function ExitGate.install(
 		local bLightPart = bPart(
 			"StatusBeacon",
 			Vector3.new(0.8, 0.4, 0.4),
-			frameCF * CFrame.new(0, 3.8, 0.7),
+			frameCF * CFrame.new(0, 3.8, -0.7),
 			Color3.fromRGB(205, 58, 48),
 			Enum.Material.Neon,
 			false
 		)
+		bLightPart.CastShadow = false
 		local bl = Instance.new("PointLight")
 		bl.Color = Color3.fromRGB(205, 58, 48)
 		bl.Range = 14
@@ -103,6 +105,47 @@ function ExitGate.install(
 		bl.Parent = bLightPart
 		beacon = bLightPart
 		beaconLight = bl
+
+		-- Brass signage matching room station plates; Front (-Z) faces straight into lastRoom.
+		local plate = bPart(
+			"ExtractionPlate",
+			Vector3.new(3.4, 0.8, 0.12),
+			frameCF * CFrame.new(0, 5.25, -0.65),
+			Color3.fromRGB(166, 124, 66),
+			Enum.Material.Metal,
+			false
+		)
+		local gui = Instance.new("SurfaceGui")
+		gui.Face = Enum.NormalId.Front
+		gui.CanvasSize = Vector2.new(340, 80)
+		gui.LightInfluence = 0.6
+		gui.MaxDistance = 80
+		gui.Parent = plate
+		local label = Instance.new("TextLabel")
+		label.Size = UDim2.fromScale(1, 1)
+		label.BackgroundTransparency = 1
+		label.Font = Enum.Font.Code
+		label.TextColor3 = Color3.fromRGB(48, 38, 26)
+		label.TextScaled = false
+		label.TextSize = 36
+		label.Text = "EXTRACTION"
+		label.Parent = gui
+
+		-- Dust billows off the blast leaf when the bulkhead unseals.
+		local dust = Instance.new("ParticleEmitter")
+		dust.Name = "OpeningDust"
+		dust.Rate = 0
+		dust.Lifetime = NumberRange.new(1.2, 2.2)
+		dust.Speed = NumberRange.new(2, 6)
+		dust.SpreadAngle = Vector2.new(75, 75)
+		dust.Size = NumberSequence.new(0.4, 1.6)
+		dust.Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0.55),
+			NumberSequenceKeypoint.new(1, 1),
+		})
+		dust.Color = ColorSequence.new(Color3.fromRGB(140, 128, 108))
+		dust.Acceleration = Vector3.new(0, -1.5, 0)
+		dust.Parent = blastLeaf
 
 		bulkhead.PrimaryPart = blastLeaf
 		bulkhead.Parent = Workspace
@@ -157,10 +200,20 @@ function ExitGate.install(
 			since = nil
 		end
 	end
+	-- Held lamps glow green so teammates can see at a glance which lever is active.
+	local function refreshLamps()
+		for i, lampPart in leverLamps do
+			local target = if holders[i] ~= nil then Color3.fromRGB(82, 232, 128) else Color3.fromRGB(228, 162, 64)
+			if lampPart.Color ~= target then
+				lampPart.Color = target
+			end
+		end
+	end
 	local function update()
 		if open or not ready then
 			return
 		end
+		refreshLamps()
 		for i, player in holders do
 			if not player then
 				continue
@@ -208,6 +261,15 @@ function ExitGate.install(
 		if beaconLight then
 			beaconLight.Color = Color3.fromRGB(82, 232, 128)
 		end
+		if door then
+			local leaf = door:FindFirstChild("BlastLeaf")
+			if leaf and leaf:IsA("BasePart") then
+				local em = leaf:FindFirstChild("OpeningDust")
+				if em and em:IsA("ParticleEmitter") then
+					em:Emit(40)
+				end
+			end
+		end
 		remotes:SetAttribute("ExitOpen", true)
 		local doorEvent = remotes:FindFirstChild("DoorUnlocked") :: RemoteEvent
 		doorEvent:FireAllClients("ExitDoor")
@@ -217,7 +279,8 @@ function ExitGate.install(
 		local part = Workspace:FindFirstChild(name)
 		if not part then
 			local sideOffset = if index == 1 then -4.2 else 4.2
-			local baseCF = exit.CFrame * CFrame.new(sideOffset, -exit.Size.Y / 2 + 2.0, 2.2)
+			-- Negative Z places both levers strictly inside lastRoom in front of BlastLeaf.
+			local baseCF = exit.CFrame * CFrame.new(sideOffset, -exit.Size.Y / 2 + 2.0, -2.2)
 
 			local hook = Instance.new("Part")
 			hook.Name = name
@@ -236,18 +299,20 @@ function ExitGate.install(
 			handle.Size = Vector3.new(0.22, 1.4, 0.22)
 			handle.Material = Enum.Material.Metal
 			handle.Color = Color3.fromRGB(190, 140, 56)
-			handle.CFrame = baseCF * CFrame.new(0, 0.8, 0.55) * CFrame.Angles(0.45, 0, 0)
+			handle.CFrame = baseCF * CFrame.new(0, 0.8, -0.55) * CFrame.Angles(-0.45, 0, 0)
 			handle.Parent = hook
 
 			local lamp = Instance.new("Part")
 			lamp.Name = "LeverLamp"
 			lamp.Anchored = true
 			lamp.CanCollide = false
+			lamp.CastShadow = false
 			lamp.Size = Vector3.new(0.4, 0.25, 0.2)
 			lamp.Material = Enum.Material.Neon
 			lamp.Color = Color3.fromRGB(228, 162, 64)
-			lamp.CFrame = baseCF * CFrame.new(0, 1.65, 0.48)
+			lamp.CFrame = baseCF * CFrame.new(0, 1.65, -0.48)
 			lamp.Parent = hook
+			leverLamps[index] = lamp
 
 			part = hook
 			table.insert(owned, hook)
@@ -270,7 +335,7 @@ function ExitGate.install(
 		end
 		prompt.Name = "Prompt"
 		prompt.ActionText = "Locked — Missing Keys/Fuses"
-		prompt.ObjectText = name
+		prompt.ObjectText = "Extraction lever " .. (if index == 1 then "A" else "B")
 		prompt.HoldDuration = 0
 		prompt.MaxActivationDistance = 7
 		prompt.RequiresLineOfSight = true
@@ -323,20 +388,37 @@ function ExitGate.install(
 		arm = function()
 			ready = true
 			for _, p in prompts do
-				p.ActionText = "Hold Lever"
+				p.ActionText = "Hold to open bulkhead"
 				p.HoldDuration = 3
 				p.Enabled = true
+			end
+			refreshLamps()
+			-- Beacon traffic light: red = locked, amber = objectives complete, green = open.
+			if beacon then
+				beacon.Color = Color3.fromRGB(228, 162, 64)
+			end
+			if beaconLight then
+				beaconLight.Color = Color3.fromRGB(228, 162, 64)
 			end
 			remotes:SetAttribute("ObjectivesComplete", true)
 		end,
 		close = function()
 			ready = false
 			open = false
+			since = nil
 			extract.Enabled = false
 			for _, p in prompts do
 				p.Enabled = false
 			end
 			table.clear(holders)
+			table.clear(completed)
+			refreshLamps()
+			if beacon then
+				beacon.Color = Color3.fromRGB(205, 58, 48)
+			end
+			if beaconLight then
+				beaconLight.Color = Color3.fromRGB(205, 58, 48)
+			end
 		end,
 		destroy = function()
 			for _, unreg in unregisters do

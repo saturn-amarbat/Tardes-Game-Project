@@ -141,8 +141,8 @@ liftPrompt.Triggered:Connect(function(player)
 	filter.FilterDescendantsInstances = { first :: Instance }
 	filter.RespectCanCollide = true
 	local floor: RaycastResult? = nil
-	-- Builder templates can orient their doorway anchors in either direction.
-	for _, direction in { -1, 1 } do
+	-- Prefer stepping inward (+1 * LookVector) into Room_01 before testing -1.
+	for _, direction in { 1, -1 } do
 		local candidate = entrance.Position + entrance.CFrame.LookVector * (4 * direction)
 		local hit = Workspace:Raycast(candidate + Vector3.yAxis * 3, -Vector3.yAxis * 12, filter)
 		if hit and hit.Normal.Y > 0.65 then

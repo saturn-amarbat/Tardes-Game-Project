@@ -96,8 +96,10 @@ local function addPassageLamp(room: Model, exitAnchor: BasePart)
 end
 
 -- Non-colliding iron door casings and brass station plates frame each threshold
--- cleanly inside the room so neither players nor MainNPC_Stalker ever snag.
-local function addDoorFrame(room: Model, anchor: BasePart, labelText: string?)
+-- cleanly inside the room so neither players nor MainNPC_Stalker ever snag,
+-- while solid SeamWall/SeamLintel infills seal width transitions and room ends
+-- so no player can ever walk around a doorway or off a floor edge into the void.
+local function addDoorFrame(room: Model, anchor: BasePart, labelText: string?, sealBackDoorway: boolean?)
 	local casing = Instance.new("Model")
 	casing.Name = "DoorCasing"
 	local iron = Color3.fromRGB(64, 58, 50)
@@ -131,6 +133,111 @@ local function addDoorFrame(room: Model, anchor: BasePart, labelText: string?)
 
 	local conduit = trim("ConduitRun", Vector3.new(5.2, 0.28, 0.28), CFrame.new(0, 5.05, -0.55))
 	conduit.Color = Color3.fromRGB(38, 34, 30)
+
+	-- Measure the room's interior width & ceiling near this anchor so solid cheek walls
+	-- span all the way to WallLeft/WallRight/Ceiling, sealing every transition seam.
+	local anchorCF = anchor.CFrame
+	local minLeftX, maxRightX = 0, 0
+	local ceilingBottomLocalY = 6.5
+	local existingWallLeft = false
+	local existingWallRight = false
+	local infillColor = Color3.fromRGB(56, 58, 56)
+	local infillMaterial = Enum.Material.Concrete
+
+	for _, desc in room:GetDescendants() do
+		if not desc:IsA("BasePart") or desc == anchor or desc.Name == "Entrance" or desc.Name == "Exit" then
+			continue
+		end
+		local lp = anchorCF:PointToObjectSpace(desc.Position)
+		if math.abs(lp.Z) <= math.max(desc.Size.Z, desc.Size.X) * 0.5 + 2.0 then
+			local rightAxis = math.abs(anchorCF:VectorToObjectSpace(desc.CFrame.RightVector).X)
+			local halfSpanX = if rightAxis > 0.5 then desc.Size.X * 0.5 else desc.Size.Z * 0.5
+			if desc.CanCollide and lp.Y < -2.0 and (desc.Name:find("Floor") or desc.Size.Y <= 1.5) then
+				minLeftX = math.min(minLeftX, lp.X - halfSpanX)
+				maxRightX = math.max(maxRightX, lp.X + halfSpanX)
+			elseif desc.Name:find("Ceiling") and desc.CanCollide then
+				ceilingBottomLocalY = math.max(ceilingBottomLocalY, lp.Y - desc.Size.Y * 0.5)
+				infillColor = desc.Color
+				infillMaterial = desc.Material
+			elseif desc.Name:find("Wall") and desc.CanCollide and desc.Size.Y >= 4 then
+				infillColor = desc.Color
+				infillMaterial = desc.Material
+				-- Check if an authored end wall already covers the left/right side of this doorway.
+				if math.abs(lp.Z) <= 1.2 and lp.X - halfSpanX <= -2.1 and lp.X + halfSpanX >= -2.5 then
+					existingWallLeft = true
+				end
+				if math.abs(lp.Z) <= 1.2 and lp.X + halfSpanX >= 2.1 and lp.X - halfSpanX <= 2.5 then
+					existingWallRight = true
+				end
+			end
+		end
+	end
+
+	local floorLocalY = -anchor.Size.Y / 2
+	local fullHeight = math.max(ceilingBottomLocalY - floorLocalY, 9.5)
+	local centerY = floorLocalY + fullHeight / 2
+
+	local function solidSeam(name: string, size: Vector3, offset: CFrame, color: Color3, mat: Enum.Material)
+		local p = Instance.new("Part")
+		p.Name = name
+		p.Anchored = true
+		p.CanCollide = true
+		p.CanQuery = true
+		p.CanTouch = false
+		p.TopSurface = Enum.SurfaceType.Smooth
+		p.BottomSurface = Enum.SurfaceType.Smooth
+		p.Size = size
+		p.Color = color
+		p.Material = mat
+		p.CFrame = anchor.CFrame * offset
+		p.Parent = casing
+	end
+
+	-- Keep >= 4.2 studs clear (-2.1..+2.1) so Stalker (AgentRadius=1.6) never snags.
+	if not existingWallLeft and minLeftX < -2.15 then
+		local width = math.abs(minLeftX + 2.1) + 0.5
+		local centerX = minLeftX + width * 0.5 - 0.5
+		solidSeam(
+			"SeamWallL",
+			Vector3.new(width, fullHeight, 0.9),
+			CFrame.new(centerX, centerY, -0.55),
+			infillColor,
+			infillMaterial
+		)
+	end
+	if not existingWallRight and maxRightX > 2.15 then
+		local width = math.abs(maxRightX - 2.1) + 0.5
+		local centerX = maxRightX - width * 0.5 + 0.5
+		solidSeam(
+			"SeamWallR",
+			Vector3.new(width, fullHeight, 0.9),
+			CFrame.new(centerX, centerY, -0.55),
+			infillColor,
+			infillMaterial
+		)
+	end
+
+	local lintelBottom = 3.5
+	if ceilingBottomLocalY > lintelBottom + 0.1 then
+		local lintelH = ceilingBottomLocalY - lintelBottom
+		solidSeam(
+			"SeamLintel",
+			Vector3.new(4.8, lintelH, 0.9),
+			CFrame.new(0, lintelBottom + lintelH * 0.5, -0.55),
+			infillColor,
+			infillMaterial
+		)
+	end
+
+	if sealBackDoorway then
+		solidSeam(
+			"EntrySealDoor",
+			Vector3.new(4.4, 7.2, 0.6),
+			CFrame.new(0, 0.1, -0.35),
+			Color3.fromRGB(48, 54, 52),
+			Enum.Material.DiamondPlate
+		)
+	end
 
 	if labelText then
 		local plate = trim("StationPlate", Vector3.new(2.1, 0.62, 0.1), CFrame.new(0, 4.55, -1.15))
@@ -399,9 +506,11 @@ function RoomGenerator.generate(numRooms: number): { Model }
 
 			if solidOverlaps == 0 then
 				addPassageLamp(candidate, exit)
-				addDoorFrame(candidate, entrance, string.format("STATION %02d", roomIndex))
+				addDoorFrame(candidate, entrance, string.format("STATION %02d", roomIndex), roomIndex == 1)
 				if roomIndex < numRooms then
-					addDoorFrame(candidate, exit, string.format("STATION %02d", roomIndex + 1))
+					addDoorFrame(candidate, exit, string.format("STATION %02d", roomIndex + 1), false)
+				else
+					addDoorFrame(candidate, exit, nil, false)
 				end
 				addRoomAtmosphere(candidate)
 				candidate.Parent = dungeonFolder

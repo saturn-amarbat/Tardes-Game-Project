@@ -62,7 +62,7 @@ function InteractionRouter.init()
 		end
 	end)
 
-	ProximityPromptService.TriggerEnded:Connect(function(prompt: ProximityPrompt, player: Player)
+	ProximityPromptService.PromptTriggerEnded:Connect(function(prompt: ProximityPrompt, player: Player)
 		local entry = registered[prompt]
 		if entry and entry.onTriggerEnded then
 			entry.onTriggerEnded(player, prompt, entry.targetPart)

@@ -93,7 +93,7 @@ local function assemble(world: Folder, origin: CFrame, seed: number): Layout
 		local side = if rng:NextInteger(0, 1) == 0 then -1 else 1
 		local junction = if socket
 			then extend("Junction", socket, side, "Junction " .. index)
-			else assert(place("Junction", "Junction 1", side, nil))
+			else assert(place("Junction", "Junction 1", side, nil), "First hallway junction is obstructed")
 		local id = junction:GetAttribute("NodeId")
 		table.insert(spine, id)
 		if index == 1 then
@@ -131,7 +131,7 @@ local function assemble(world: Folder, origin: CFrame, seed: number): Layout
 			end
 		end
 	end
-	extend("Cap", assert(socket), 1, "End bulkhead")
+	extend("Cap", assert(socket, "Hallway spine needs a final exit"), 1, "End bulkhead")
 	Registry.configure(markers, spine)
 	return {
 		root = world,

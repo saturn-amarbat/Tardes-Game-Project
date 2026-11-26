@@ -531,7 +531,7 @@ local function createPad(index: number, cf: CFrame, friendsOnly: boolean): PadSt
 	base.Shape = Enum.PartType.Cylinder
 	base.Size = Vector3.new(0.6, LobbyConfig.PAD_RADIUS * 2, LobbyConfig.PAD_RADIUS * 2)
 	base.CFrame = cf * CFrame.new(0, 0.3, 0) * CFrame.Angles(0, 0, math.rad(90))
-	base.Color = Color3.fromRGB(28, 34, 32)
+	base.Color = Color3.fromRGB(48, 56, 54)
 	base.Material = Enum.Material.Slate
 	base.Anchored = true
 	base.CanCollide = true
@@ -554,12 +554,17 @@ local function createPad(index: number, cf: CFrame, friendsOnly: boolean): PadSt
 	glow.BottomSurface = Enum.SurfaceType.Smooth
 	glow.Parent = model
 
+	local lightMount = Instance.new("Attachment")
+	lightMount.Name = "PadLightMount"
+	lightMount.Parent = glow
+	lightMount.WorldCFrame = cf * CFrame.new(0, 2.4, 0)
+
 	local pointLight = Instance.new("PointLight")
 	pointLight.Color = if friendsOnly then COLOR_IDLE_FRIENDS else COLOR_IDLE
-	pointLight.Range = 18
-	pointLight.Brightness = 0.55
+	pointLight.Range = 24
+	pointLight.Brightness = 1.45
 	pointLight.Shadows = false
-	pointLight.Parent = glow
+	pointLight.Parent = lightMount
 
 	local billboard = Instance.new("BillboardGui")
 	billboard.Name = "PadBillboard"
@@ -640,7 +645,8 @@ local function bindExistingPad(index: number, model: Model, friendsOnly: boolean
 		return nil
 	end
 	local glowPart = if glow and glow:IsA("Part") then glow else nil
-	local glowLight = if glowPart then glowPart:FindFirstChildOfClass("PointLight") else nil
+	local glowLightInst = if glowPart then glowPart:FindFirstChildWhichIsA("PointLight", true) else nil
+	local glowLight = if glowLightInst and glowLightInst:IsA("PointLight") then glowLightInst else nil
 	local bb = if billboard and billboard:IsA("BillboardGui") then billboard else nil
 	local padCF = CFrame.new(base.Position.X, base.Position.Y - 0.3, base.Position.Z)
 

@@ -65,23 +65,23 @@ LobbyConfig.BOUNDARY_RADIUS = 90
 -- Lighting & Atmosphere (Dark Forest Night)
 --------------------------------------------------------------------------------
 LobbyConfig.LIGHTING = {
-	ClockTime = 0.5,
-	Brightness = 0.45,
-	Ambient = Color3.fromRGB(22, 32, 42),
-	OutdoorAmbient = Color3.fromRGB(28, 42, 54),
-	ExposureCompensation = -0.1,
-	FogColor = Color3.fromRGB(24, 46, 56),
+	ClockTime = 22.5,
+	Brightness = 0.72,
+	Ambient = Color3.fromRGB(44, 58, 70),
+	OutdoorAmbient = Color3.fromRGB(58, 78, 92),
+	ExposureCompensation = 0.16,
+	FogColor = Color3.fromRGB(26, 52, 64),
 	FogStart = 18,
-	FogEnd = 150,
+	FogEnd = 155,
 }
 
 LobbyConfig.ATMOSPHERE = {
-	Density = 0.38,
+	Density = 0.32,
 	Offset = 0.08,
-	Color = Color3.fromRGB(36, 64, 78),
-	Decay = Color3.fromRGB(16, 28, 38),
+	Color = Color3.fromRGB(52, 86, 102),
+	Decay = Color3.fromRGB(22, 38, 52),
 	Glare = 0.0,
-	Haze = 2.8,
+	Haze = 2.4,
 }
 
 LobbyConfig.BLOOM = {
@@ -91,7 +91,7 @@ LobbyConfig.BLOOM = {
 }
 
 LobbyConfig.COLOR_CORRECTION = {
-	Brightness = -0.02,
+	Brightness = 0.02,
 	Contrast = 0.08,
 	Saturation = -0.18,
 	TintColor = Color3.fromRGB(216, 232, 248),

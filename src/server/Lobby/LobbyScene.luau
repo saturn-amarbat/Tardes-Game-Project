@@ -48,6 +48,22 @@ local function makePart(
 	return p
 end
 
+local function makeEllipsoid(
+	parent: Instance,
+	name: string,
+	size: Vector3,
+	cf: CFrame,
+	color: Color3,
+	mat: Enum.Material,
+	collide: boolean
+): Part
+	local p = makePart(parent, name, size, cf, color, mat, collide)
+	local mesh = Instance.new("SpecialMesh")
+	mesh.MeshType = Enum.MeshType.Sphere
+	mesh.Parent = p
+	return p
+end
+
 local DIRT = Color3.fromRGB(46, 36, 26)
 local DARK_DIRT = Color3.fromRGB(30, 22, 16)
 local MOSS = Color3.fromRGB(36, 52, 32)
@@ -138,7 +154,8 @@ end
 -- Ground, Path, Mud, Puddles, Leaf Litter
 --------------------------------------------------------------------------------
 local function buildGround(parent: Instance)
-	makePart(parent, "Ground", Vector3.new(240, 2, 240), CFrame.new(0, -1, 0), DIRT, Enum.Material.Ground, true)
+	-- Raised +0.04 studs so LobbyMap ground clears a co-located Place Baseplate (top at Y=0)
+	makePart(parent, "Ground", Vector3.new(240, 2, 240), CFrame.new(0, -0.96, 0), DIRT, Enum.Material.Ground, true)
 
 	-- Winding dirt path connecting Shop (-X) <-> Campfire (0) <-> Play Circles (+X)
 	for x = -34, 34, 4 do
@@ -208,8 +225,11 @@ local function buildTree(parent: Instance, pos: Vector3, height: number, lean: n
 
 	local trunkCF = CFrame.new(pos.X, pos.Y + height / 2, pos.Z)
 		* CFrame.Angles(math.rad(lean), math.rad(math.random(0, 360)), 0)
+		* CFrame.Angles(0, 0, math.rad(90))
 	local radius = 0.75 + height * 0.04
-	makePart(folder, "Trunk", Vector3.new(radius * 2, height, radius * 2), trunkCF, BARK, Enum.Material.Wood, true)
+	local trunk =
+		makePart(folder, "Trunk", Vector3.new(height, radius * 2, radius * 2), trunkCF, BARK, Enum.Material.Wood, true)
+	trunk.Shape = Enum.PartType.Cylinder
 
 	local branchCount = math.random(2, 3)
 	for b = 1, branchCount do
@@ -237,13 +257,23 @@ local function buildTree(parent: Instance, pos: Vector3, height: number, lean: n
 		end
 	end
 
-	local canopyCF = CFrame.new(pos.X, pos.Y + height * 0.88, pos.Z)
-	makePart(
+	local canopySpread = 8.5 + math.random() * 3.5
+	local canopyCF = CFrame.new(pos.X, pos.Y + height * 0.86, pos.Z) * CFrame.Angles(0, math.rad(math.random(0, 90)), 0)
+	makeEllipsoid(
 		folder,
 		"Canopy",
-		Vector3.new(7 + math.random() * 4, 2.2, 7 + math.random() * 4),
+		Vector3.new(canopySpread, 4.8 + math.random() * 1.8, canopySpread * 0.9),
 		canopyCF,
-		Color3.fromRGB(20, 28, 20),
+		Color3.fromRGB(20, 30, 22),
+		Enum.Material.LeafyGrass,
+		false
+	)
+	makeEllipsoid(
+		folder,
+		"CanopyTop",
+		Vector3.new(canopySpread * 0.62, 4.2 + math.random() * 1.4, canopySpread * 0.62),
+		canopyCF * CFrame.new(math.random(-1, 1), 2.8, math.random(-1, 1)),
+		Color3.fromRGB(16, 24, 18),
 		Enum.Material.LeafyGrass,
 		false
 	)
@@ -411,8 +441,8 @@ local function buildCampfire(parent: Instance)
 	fireLight.Shadows = false
 	fireLight.Parent = fireCore
 
-	-- Sparse trail lantern posts guiding between Zone A (Shop) and Zone B (Play Circles)
-	for idx, lPos in { Vector3.new(-18, 0, 10), Vector3.new(20, 0, 2) } do
+	-- Sparse trail lantern posts guiding between Spawn, Zone A (Shop), and Zone B (Play Circles)
+	for idx, lPos in { Vector3.new(-18, 0, 10), Vector3.new(20, 0, 2), Vector3.new(0, 0, -14) } do
 		makePart(
 			fireFolder,
 			"TrailPost_" .. tostring(idx),
@@ -539,7 +569,7 @@ local function buildFrog(parent: Instance): Model
 	frogModel.Parent = parent
 
 	-- Squat, broad, unsettling frog (~13 studs tall at brow, ~15 wide) tucked behind counter
-	local body = makePart(
+	local body = makeEllipsoid(
 		frogModel,
 		"Body",
 		Vector3.new(11, 7.2, 10),
@@ -548,11 +578,10 @@ local function buildFrog(parent: Instance): Model
 		Enum.Material.SmoothPlastic,
 		true
 	)
-	body.Shape = Enum.PartType.Ball
 	body.Reflectance = 0.08
 	frogModel.PrimaryPart = body
 
-	local belly = makePart(
+	local belly = makeEllipsoid(
 		frogModel,
 		"Belly",
 		Vector3.new(7.4, 5.4, 4.2),
@@ -561,11 +590,10 @@ local function buildFrog(parent: Instance): Model
 		Enum.Material.SmoothPlastic,
 		false
 	)
-	belly.Shape = Enum.PartType.Ball
 	belly.Reflectance = 0.05
 
 	-- Throat sac (animated by LobbyFrogController)
-	local throat = makePart(
+	local throat = makeEllipsoid(
 		frogModel,
 		"Throat",
 		Vector3.new(6.4, 2.8, 4.2),
@@ -574,7 +602,6 @@ local function buildFrog(parent: Instance): Model
 		Enum.Material.SmoothPlastic,
 		false
 	)
-	throat.Shape = Enum.PartType.Ball
 	throat.Reflectance = 0.08
 
 	-- Movable Head subtree tucked low into shoulders (animated & turns toward player)
@@ -582,7 +609,7 @@ local function buildFrog(parent: Instance): Model
 	headModel.Name = "HeadRig"
 	headModel.Parent = frogModel
 
-	local head = makePart(
+	local head = makeEllipsoid(
 		headModel,
 		"Head",
 		Vector3.new(10.6, 4.4, 8.2),
@@ -591,28 +618,26 @@ local function buildFrog(parent: Instance): Model
 		Enum.Material.SmoothPlastic,
 		false
 	)
-	head.Shape = Enum.PartType.Ball
 	head.Reflectance = 0.09
 	headModel.PrimaryPart = head
 
-	local snout = makePart(
+	local snout = makeEllipsoid(
 		headModel,
 		"Snout",
-		Vector3.new(8.8, 2.6, 4.8),
-		cf * CFrame.new(0, 7.2, -4.4),
+		Vector3.new(9.6, 3.0, 5.2),
+		cf * CFrame.new(0, 7.2, -3.8),
 		FROG_SKIN,
 		Enum.Material.SmoothPlastic,
 		false
 	)
-	snout.Shape = Enum.PartType.Ball
 	snout.Reflectance = 0.09
 
-	-- Wide unsettling mouth slit
+	-- Wide unsettling mouth slit tucked cleanly inside snout curve
 	makePart(
 		headModel,
 		"MouthSlit",
-		Vector3.new(7.8, 0.28, 1.4),
-		cf * CFrame.new(0, 6.9, -5.8),
+		Vector3.new(5.4, 0.24, 0.8),
+		cf * CFrame.new(0, 6.9, -5.6),
 		Color3.fromRGB(16, 18, 16),
 		Enum.Material.SmoothPlastic,
 		false
@@ -630,14 +655,14 @@ local function buildFrog(parent: Instance): Model
 	)
 	tongue.Reflectance = 0.12
 
-	-- Wide glossy bulging eyes perched atop the brow with horizontal slit pupils + eyelids
+	-- Wide glossy bulging eyes seated into the brow with horizontal slit pupils + eyelids
 	for idx, side in { -3.1, 3.1 } do
 		local eyeTag = if idx == 1 then "L" else "R"
 		local eyeBase = makePart(
 			headModel,
 			"EyeOrb_" .. eyeTag,
 			Vector3.new(2.5, 2.5, 2.5),
-			cf * CFrame.new(side, 9.9, -3.2),
+			cf * CFrame.new(side, 9.2, -2.6),
 			FROG_EYE,
 			Enum.Material.SmoothPlastic,
 			false
@@ -649,7 +674,7 @@ local function buildFrog(parent: Instance): Model
 			headModel,
 			"Pupil_" .. eyeTag,
 			Vector3.new(1.5, 0.5, 0.45),
-			cf * CFrame.new(side, 9.9, -4.3),
+			cf * CFrame.new(side, 9.2, -3.7),
 			Color3.fromRGB(8, 8, 6),
 			Enum.Material.SmoothPlastic,
 			false
@@ -660,23 +685,22 @@ local function buildFrog(parent: Instance): Model
 			headModel,
 			"EyeGloss_" .. eyeTag,
 			Vector3.new(0.45, 0.45, 0.25),
-			cf * CFrame.new(side - 0.35, 10.4, -4.35),
+			cf * CFrame.new(side - 0.35, 9.7, -3.75),
 			Color3.fromRGB(255, 255, 240),
 			Enum.Material.Neon,
 			false
 		)
 		gloss.CastShadow = false
 
-		local eyelid = makePart(
+		makeEllipsoid(
 			headModel,
 			"Eyelid_" .. eyeTag,
 			Vector3.new(2.65, 0.48, 2.65),
-			cf * CFrame.new(side, 11.1, -3.2),
+			cf * CFrame.new(side, 10.35, -2.6),
 			FROG_DAMP,
 			Enum.Material.SmoothPlastic,
 			false
 		)
-		eyelid.Shape = Enum.PartType.Ball
 	end
 
 	-- Damp skin mottling & warts
@@ -687,7 +711,7 @@ local function buildFrog(parent: Instance): Model
 		{ Vector3.new(4.2, 5.6, 0.4), Vector3.new(1.5, 1.4, 1.4) },
 	}
 	for i, w in warts do
-		local spot = makePart(
+		local spot = makeEllipsoid(
 			frogModel,
 			"Wart_" .. tostring(i),
 			w[2],
@@ -696,7 +720,6 @@ local function buildFrog(parent: Instance): Model
 			Enum.Material.SmoothPlastic,
 			false
 		)
-		spot.Shape = Enum.PartType.Ball
 		spot.Reflectance = 0.12
 	end
 
@@ -722,7 +745,7 @@ local function buildFrog(parent: Instance): Model
 				false
 			)
 		end
-		local backLeg = makePart(
+		makeEllipsoid(
 			frogModel,
 			"BackLeg",
 			Vector3.new(4.2, 4.6, 5.8),
@@ -731,7 +754,6 @@ local function buildFrog(parent: Instance): Model
 			Enum.Material.SmoothPlastic,
 			true
 		)
-		backLeg.Shape = Enum.PartType.Ball
 	end
 
 	-- Ramshackle wooden shop stall
@@ -815,6 +837,32 @@ local function buildFrog(parent: Instance): Model
 		light.Shadows = false
 		light.Parent = lantern
 	end
+
+	-- Interior stall ceiling lamp gently illuminating the Frog Merchant's face
+	makePart(
+		stall,
+		"CeilingLampCord",
+		Vector3.new(0.12, 1.4, 0.12),
+		cf * CFrame.new(0, 14.3, -5.5),
+		IRON,
+		Enum.Material.Metal,
+		false
+	)
+	local ceilingLamp = makePart(
+		stall,
+		"InteriorLamp",
+		Vector3.new(0.8, 0.7, 0.8),
+		cf * CFrame.new(0, 13.4, -5.5),
+		LANTERN_GLOW,
+		Enum.Material.Neon,
+		false
+	)
+	local interiorLight = Instance.new("PointLight")
+	interiorLight.Color = Color3.fromRGB(255, 198, 128)
+	interiorLight.Range = 24
+	interiorLight.Brightness = 1.4
+	interiorLight.Shadows = false
+	interiorLight.Parent = ceilingLamp
 
 	-- Specimen jars on the counter
 	for i = 1, 4 do

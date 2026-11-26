@@ -46,7 +46,8 @@ c:/Users/sanch/Projects/horror-game/
     ├── server/                         # ServerScriptService/Server
     │   ├── init.server.luau            # Server bootstrap & expedition generation loop
     │   ├── InteractionRouter.luau      # Centralized ProximityPromptService validator & hold cleanup
-    │   ├── RoomGenerator.luau          # Flush anchor snapping, turn-tracking & SafeRoom insertion
+    │   ├── MazeVariations.luau         # 8x8x8 (512) R.E.P.O. themes, hubs, wings & props
+    │   ├── RoomGenerator.luau          # Branching modular maze snapping, SafeRoom & bulkhead seals
     │   ├── TeleportManager.luau        # Streaming-safe player & squad teleports
     │   ├── MatchScaleManager.luau      # 1–4 player scaling, run lifecycle, mid-run revives
     │   ├── ObjectivePickups.luau       # Server-locked key & ceramic fuse spawns
@@ -95,12 +96,12 @@ c:/Users/sanch/Projects/horror-game/
 - **Role**: Centralized `ProximityPromptService` dispatcher (`PromptTriggered`, `PromptButtonHoldBegan`, `PromptButtonHoldEnded`, `TriggerEnded`).
 - **Why**: Prevents scattered per-part listeners, validates `DungeonEntered == true`, living `HumanoidRootPart`, and `(root.Position - targetPart.Position).Magnitude <= MaxActivationDistance + 4`, and automatically releases lever holds on `PlayerRemoving` or `Humanoid.Died`.
 
-### `RoomGenerator.luau`
-- **Role**: Procedural room generation using flush front-face anchor snapping and turn-direction tracking.
-- **Snapping & Anti-Looping Rules**:
-  - Aligns `targetEntranceCF = currentExitCF * CFrame.Angles(0, math.pi, 0)` and pivots rooms into `Workspace.GeneratedDungeon` with `ModelStreamingMode = Enum.ModelStreamingMode.Atomic`.
-  - Computes `getRoomTurnSign(entrance, exit)` and forbids two consecutive left or right turns (`turnSign == lastTurnSign`) alongside `GetPartBoundsInBox` overlap checks.
-  - Inserts `ToadMakerSafeRoom` at slot `ceil(numRooms / 2)` (Room `5` of `10`), using a Studio template if present or a built-in `Atomic` fallback.
+### `RoomGenerator.luau` & `MazeVariations.luau`
+- **Role**: Procedural $8^3$ (`512`-variation) R.E.P.O.-style modular maze assembly across 8 Themes × 8 Branching Topologies × 8 Decoration Loadouts.
+- **Snapping, Branching & Waterproof Sealing**:
+  - Builds a guaranteed traversable main spine (`targetEntranceCF = parentSocket.CFrame * CFrame.Angles(0, math.pi, 0)`) from `Station 01` (`Room_01_*` for `SurveyLift`/`MaintenanceBay`) through `ToadMakerSafeRoom` (`ceil(numRooms / 2)`) to the final extraction room (`ExitGate`).
+  - Grows 1–2 room branching wings off `CrossHub`, `TJunctionL/R`, `SplitCourt`, and `StepGallery` side sockets using `GetPartBoundsInBox` collision checks, sealing all unexpanded hub sockets and branch leaf ends with solid reinforced bulkheads (`sealSocket`).
+  - Applies active theme palettes/lights and collision-verified perimeter wall props (`MazeDecor`) across all rooms (`1..#orderedRooms`), preserving `Room_01_*` clearance (`14` studs) and open `>= 4.2`-stud AI navigation aisles.
 
 ### `TeleportManager.luau`
 - **Role**: Server-authoritative teleportation with `StreamingEnabled` safety (`Player:RequestStreamAroundAsync`, post-yield character revalidation, and `2.5`-stud squad lateral offsets).

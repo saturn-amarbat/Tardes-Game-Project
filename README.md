@@ -136,3 +136,9 @@ Open `src/shared/LobbyConfig.luau` and update `GAME_PLACE_ID`:
 LobbyConfig.GAME_PLACE_ID = 122077989749573 -- Destination Place ID for Project Horror
 ```
 Make sure both the Lobby place and destination place belong to the same Roblox Universe (Experience) so `TeleportService:ReserveServer` and `TeleportAsync` succeed in live servers. When `Project Horror` runs as a combined place with `Workspace.LobbyMap`, public joins (`PrivateServerId == ""`) start in the Lobby, and reserved servers launched from a play circle (`PrivateServerId ~= ""`) start directly in the actual game.
+
+### Procedural $8^3$ Modular Bunker Maze (R.E.P.O.-Style)
+Every time a squad enters the bunker (`MatchScaleManager.reset()` $\to$ `RoomGenerator.generate(10)`), `src/server/MazeVariations.luau` rolls a fresh seed and one of **$8^3 = 512$** structural combinations:
+- **8 Architectural Themes** (`McJannek Station`, `Headman Manor Wing`, `Hydro Turbine Sublevel`, `Core Reactor Block`, `Blackpine Sanatorium`, `Collapsed Archive`, `Cryo Storage Bay`, `Deep Survey Vault`) re-theming floors, walls, ceilings, lights, and dust motes.
+- **8 Modular Topologies** (`Spine & Pockets`, `Twin-Wing Crossroads`, `Spiral Switchback`, `Grand Atrium Hubs`, `Sublevel Bypass Grid`, `Maintenance Gauntlet`, `Shattered Labyrinth`, `Deep Vault Sector`) combining `RoomTemplates` with procedural `CrossHub`, `TJunctionL/R`, `CornerLeft/Right`, `SplitCourt`, `StepGallery`, and sealed branching wing vaults.
+- **8 Wall/Corner Decoration Sets** (`Supply Crates`, `Bio-Fungal Overgrowth`, `Power Conduits`, `Survey Archives`, `Boilers & Valves`, `Lockdown Barricades`, `Abandoned Quarters`, `Anomaly Salvage Caches`) placed via collision-safe raycasts along perimeter walls without obstructing doorways or `MainNPC_Stalker` paths.

@@ -33,7 +33,7 @@ LobbyConfig.PLAYTEST_IN_PLACE_IN_STUDIO = true
 --- Returns true when this server should boot players into the Dark Forest Lobby first.
 function LobbyConfig.shouldStartInLobby(): boolean
 	-- Live reserved servers launched from a play circle start directly in the game.
-	if game.PrivateServerId ~= "" then
+	if RunService:IsServer() and game.PrivateServerId ~= "" then
 		return false
 	end
 	local override = Workspace:GetAttribute("ForceLobbyScene")
@@ -140,7 +140,7 @@ LobbyConfig.COLOR_CORRECTION = {
 --------------------------------------------------------------------------------
 LobbyConfig.AUDIO = {
 	Crickets = "rbxassetid://9112762653", -- Creator Store: Crickets And Cicadas 4 (SFX)
-	WindLoop = "rbxassetid://105667490483473", -- Creator Store: Wind Sounds Nature Ambient Forest Calm
+	WindLoop = "rbxassetid://9112777914", -- Creator Store: Evening Wind Presence Loop (ProSoundEffects)
 	CampfireCrackle = "rbxassetid://9079463756", -- Creator Store: Fire Crackling
 	OwlHoot = "rbxassetid://150791665", -- Creator Store: Owl hoot SFX
 	BranchCrack = "rbxassetid://9116146300", -- Repo Workspace.Sounds.LeafRustle

@@ -390,8 +390,9 @@ local MODULAR_KINDS: { [string]: boolean } = {
 
 local function checkModelFits(
 	candidate: Model,
-	entrancePos: Vector3,
+	entrance: BasePart,
 	existingRooms: { Model },
+	parentRoom: Model?,
 	exitClearanceCheck: BasePart?
 ): boolean
 	local overlapParams = OverlapParams.new()
@@ -415,6 +416,7 @@ local function checkModelFits(
 	end
 	overlapParams.FilterDescendantsInstances = existingParts
 
+	local entranceCF = entrance.CFrame
 	local candidateCF, candidateSize = candidate:GetBoundingBox()
 	local overlapSize = Vector3.new(
 		math.max(candidateSize.X - 1.5, 0.1),
@@ -423,8 +425,16 @@ local function checkModelFits(
 	)
 	local hits = Workspace:GetPartBoundsInBox(candidateCF, overlapSize, overlapParams)
 	for _, part in ipairs(hits) do
-		if (part.Position - entrancePos).Magnitude > 3.5 then
-			return false
+		if parentRoom and part:IsDescendantOf(parentRoom) then
+			-- Allow flush shared doorway seam walls (lp.Z >= -1.25 along outward +Z from candidate interior)
+			local lp = entranceCF:PointToObjectSpace(part.Position)
+			if lp.Z < -1.25 and (part.Position - entrance.Position).Magnitude > 3.5 then
+				return false
+			end
+		else
+			if (part.Position - entrance.Position).Magnitude > 3.5 then
+				return false
+			end
 		end
 	end
 
@@ -533,6 +543,7 @@ function RoomGenerator.generate(numRooms: number): { Model }
 	local spawnPad = Workspace:FindFirstChild("StartSpawn")
 	local safeSlot = if numRooms >= 4 then math.ceil(numRooms / 2) else 0
 	local lastTurnSign = 0
+	local headingTurns = 0
 
 	-- Step A: Build guaranteed traversable main spine (Station 01 -> SafeRoom -> ExitGate)
 	for roomIndex = 1, numRooms do
@@ -554,82 +565,132 @@ function RoomGenerator.generate(numRooms: number): { Model }
 			candidates = buildCandidatePool(variation.topology.spinePreferred, templateNames, rng)
 		end
 
-		for _, kindName in candidates do
-			local candidate: Model?
-			if kindName == "__SAFEROOM__" then
-				candidate = (safeTemplate or buildSafeRoomTemplate()):Clone()
-			else
-				candidate = instantiateByKind(kindName, authoredByName, variation.theme, rng)
-			end
-			if not candidate then
-				continue
-			end
-
-			candidate.Name =
-				string.format("Room_%02d_%s", roomIndex, kindName:gsub("__SAFEROOM__", "ToadMakerSafeRoom"))
-			candidate.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
-			if roomIndex == safeSlot then
-				candidate:SetAttribute("SafeRoom", true)
-				candidate:SetAttribute("SurveyDressing", false)
-			else
-				MazeVariations.applyTheme(candidate, variation.theme, rng)
-			end
-
-			local entrance, exit = getRoomAnchors(candidate)
-			if not entrance or not exit then
-				candidate:Destroy()
-				continue
-			end
-
-			local turnSign = getRoomTurnSign(entrance, exit)
-			if turnSign ~= 0 and turnSign == lastTurnSign and not variation.topology.allowConsecutiveTurns then
-				candidate:Destroy()
-				continue
-			end
-
-			local targetEntranceCF = currentExitCF * CFrame.Angles(0, math.pi, 0)
-			if roomIndex == 1 and spawnPad and spawnPad:IsA("BasePart") then
-				targetEntranceCF = CFrame.new(
-					spawnPad.Position + Vector3.yAxis * (spawnPad.Size.Y + entrance.Size.Y) / 2
-				) * targetEntranceCF.Rotation
-			end
-			local entranceLocalCF = candidate:GetPivot():ToObjectSpace(entrance.CFrame)
-			candidate:PivotTo(targetEntranceCF * entranceLocalCF:Inverse())
-
-			local exitClearCheck = if roomIndex == numRooms then exit else nil
-			if checkModelFits(candidate, entrance.Position, allPlaced, exitClearCheck) then
-				addPassageLamp(candidate, exit, variation.theme.lightColor)
-				addDoorFrame(candidate, entrance, string.format("STATION %02d", roomIndex), roomIndex == 1)
-				if roomIndex < numRooms then
-					addDoorFrame(candidate, exit, string.format("STATION %02d", roomIndex + 1), false)
+		local parentSpineRoom = spineRooms[#spineRooms]
+		for pass = 1, 2 do
+			for _, kindName in candidates do
+				local candidate: Model?
+				if kindName == "__SAFEROOM__" then
+					candidate = (safeTemplate or buildSafeRoomTemplate()):Clone()
 				else
-					addDoorFrame(candidate, exit, "EXTRACTION", false)
+					candidate = instantiateByKind(kindName, authoredByName, variation.theme, rng)
 				end
-				addRoomAtmosphere(candidate, variation.theme.dustColor)
-
-				candidate.Parent = dungeonFolder
-				table.insert(spineRooms, candidate)
-				table.insert(allPlaced, candidate)
-				currentExitCF = exit.CFrame
-				if turnSign ~= 0 then
-					lastTurnSign = turnSign
+				if not candidate then
+					continue
 				end
 
-				-- Queue any hub side sockets (BranchLeft / BranchRight) for R.E.P.O. branching wings
-				for _, child in candidate:GetChildren() do
-					if (child.Name == "BranchLeft" or child.Name == "BranchRight") and child:IsA("BasePart") then
-						table.insert(openBranchSockets, {
-							room = candidate,
-							socket = child,
-							sectorIndex = roomIndex,
-						})
+				candidate.Name =
+					string.format("Room_%02d_%s", roomIndex, kindName:gsub("__SAFEROOM__", "ToadMakerSafeRoom"))
+				candidate.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
+				if roomIndex == safeSlot then
+					candidate:SetAttribute("SafeRoom", true)
+					candidate:SetAttribute("SurveyDressing", false)
+				else
+					MazeVariations.applyTheme(candidate, variation.theme, rng)
+				end
+
+				local entrance, exit = getRoomAnchors(candidate)
+				if not entrance or not exit then
+					candidate:Destroy()
+					continue
+				end
+
+				local turnSign = getRoomTurnSign(entrance, exit)
+				-- Keep main spine heading within [-1, +1] (180 deg forward sweep) so spine never loops back into Room_01
+				if turnSign ~= 0 and math.abs(headingTurns + turnSign) > 1 then
+					candidate:Destroy()
+					continue
+				end
+				if
+					pass == 1
+					and turnSign ~= 0
+					and turnSign == lastTurnSign
+					and not variation.topology.allowConsecutiveTurns
+				then
+					candidate:Destroy()
+					continue
+				end
+
+				local targetEntranceCF = currentExitCF * CFrame.Angles(0, math.pi, 0)
+				if roomIndex == 1 and spawnPad and spawnPad:IsA("BasePart") then
+					targetEntranceCF = CFrame.new(
+						spawnPad.Position + Vector3.yAxis * (spawnPad.Size.Y + entrance.Size.Y) / 2
+					) * targetEntranceCF.Rotation
+				end
+				local entranceLocalCF = candidate:GetPivot():ToObjectSpace(entrance.CFrame)
+				candidate:PivotTo(targetEntranceCF * entranceLocalCF:Inverse())
+
+				local exitClearCheck = if roomIndex == numRooms then exit else nil
+				if checkModelFits(candidate, entrance, allPlaced, parentSpineRoom, exitClearCheck) then
+					addPassageLamp(candidate, exit, variation.theme.lightColor)
+					addDoorFrame(candidate, entrance, string.format("STATION %02d", roomIndex), roomIndex == 1)
+					if roomIndex < numRooms then
+						addDoorFrame(candidate, exit, string.format("STATION %02d", roomIndex + 1), false)
+					else
+						addDoorFrame(candidate, exit, "EXTRACTION", false)
 					end
-				end
+					addRoomAtmosphere(candidate, variation.theme.dustColor)
 
-				placed = true
+					candidate.Parent = dungeonFolder
+					table.insert(spineRooms, candidate)
+					table.insert(allPlaced, candidate)
+					currentExitCF = exit.CFrame
+					if turnSign ~= 0 then
+						lastTurnSign = turnSign
+						headingTurns += turnSign
+					end
+
+					-- Queue any hub side sockets (BranchLeft / BranchRight) for R.E.P.O. branching wings
+					for _, child in candidate:GetChildren() do
+						if (child.Name == "BranchLeft" or child.Name == "BranchRight") and child:IsA("BasePart") then
+							table.insert(openBranchSockets, {
+								room = candidate,
+								socket = child,
+								sectorIndex = roomIndex,
+							})
+						end
+					end
+
+					placed = true
+					break
+				else
+					candidate:Destroy()
+				end
+			end
+			if placed then
 				break
-			else
-				candidate:Destroy()
+			end
+		end
+
+		if not placed and roomIndex == safeSlot and safeSlot < numRooms then
+			-- Defer SafeRoom one slot forward and bridge with a compact straight chamber
+			safeSlot += 1
+			for _, bridgeKind in { "RustyWoodHallway", "CorridorLong", "BunkerAirlock", "StorageBay", "SideVault" } do
+				local fallbackSpacer = instantiateByKind(bridgeKind, authoredByName, variation.theme, rng)
+				if fallbackSpacer then
+					fallbackSpacer.Name = string.format("Room_%02d_%s", roomIndex, bridgeKind)
+					fallbackSpacer.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
+					MazeVariations.applyTheme(fallbackSpacer, variation.theme, rng)
+					local ent, ex = getRoomAnchors(fallbackSpacer)
+					if ent and ex then
+						local targetCF = currentExitCF * CFrame.Angles(0, math.pi, 0)
+						fallbackSpacer:PivotTo(
+							targetCF * (fallbackSpacer:GetPivot():ToObjectSpace(ent.CFrame)):Inverse()
+						)
+						if checkModelFits(fallbackSpacer, ent, allPlaced, parentSpineRoom, nil) then
+							addPassageLamp(fallbackSpacer, ex, variation.theme.lightColor)
+							addDoorFrame(fallbackSpacer, ent, string.format("STATION %02d", roomIndex), false)
+							addDoorFrame(fallbackSpacer, ex, string.format("STATION %02d", roomIndex + 1), false)
+							addRoomAtmosphere(fallbackSpacer, variation.theme.dustColor)
+							fallbackSpacer.Parent = dungeonFolder
+							table.insert(spineRooms, fallbackSpacer)
+							table.insert(allPlaced, fallbackSpacer)
+							currentExitCF = ex.CFrame
+							placed = true
+							break
+						end
+					end
+					fallbackSpacer:Destroy()
+				end
 			end
 		end
 
@@ -683,7 +744,8 @@ function RoomGenerator.generate(numRooms: number): { Model }
 					local entLocal = wing:GetPivot():ToObjectSpace(entrance.CFrame)
 					wing:PivotTo(targetCF * entLocal:Inverse())
 
-					if checkModelFits(wing, entrance.Position, allPlaced, nil) then
+					local wingParentModel = if #wingChain > 0 then wingChain[#wingChain] else wingParent
+					if checkModelFits(wing, entrance, allPlaced, wingParentModel, nil) then
 						addDoorFrame(wing, entrance, string.format("SECTOR %s-%d", branchPrefix, depth), false)
 						addRoomAtmosphere(wing, variation.theme.dustColor)
 

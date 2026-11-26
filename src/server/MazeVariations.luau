@@ -225,7 +225,7 @@ MazeVariations.TOPOLOGIES = {
 		branchChance = 0.55,
 		maxBranches = 3,
 		maxWingDepth = 2,
-		allowConsecutiveTurns = true,
+		allowConsecutiveTurns = false,
 	},
 	{
 		id = 4,
@@ -265,7 +265,7 @@ MazeVariations.TOPOLOGIES = {
 		branchChance = 0.74,
 		maxBranches = 5,
 		maxWingDepth = 2,
-		allowConsecutiveTurns = true,
+		allowConsecutiveTurns = false,
 	},
 	{
 		id = 8,
@@ -472,10 +472,10 @@ function MazeVariations.buildModularPiece(kind: string, theme: ThemeDef, rng: Ra
 	local dims: { [string]: { w: number, d: number, n: boolean, s: boolean, e: boolean, wOpen: boolean, exitFace: string } } =
 		{
 			CrossHub = { w = 24, d = 24, n = true, s = true, e = true, wOpen = true, exitFace = "N" },
-			TJunctionL = { w = 22, d = 22, n = false, s = true, e = true, wOpen = true, exitFace = "W" },
-			TJunctionR = { w = 22, d = 22, n = false, s = true, e = true, wOpen = true, exitFace = "E" },
-			CornerLeft = { w = 18, d = 18, n = false, s = true, e = false, wOpen = true, exitFace = "W" },
-			CornerRight = { w = 18, d = 18, n = false, s = true, e = true, wOpen = false, exitFace = "E" },
+			TJunctionL = { w = 26, d = 26, n = false, s = true, e = true, wOpen = true, exitFace = "W" },
+			TJunctionR = { w = 26, d = 26, n = false, s = true, e = true, wOpen = true, exitFace = "E" },
+			CornerLeft = { w = 24, d = 24, n = false, s = true, e = false, wOpen = true, exitFace = "W" },
+			CornerRight = { w = 24, d = 24, n = false, s = true, e = true, wOpen = false, exitFace = "E" },
 			SplitCourt = { w = 26, d = 26, n = true, s = true, e = true, wOpen = true, exitFace = "N" },
 			StepGallery = { w = 22, d = 28, n = true, s = true, e = true, wOpen = true, exitFace = "N" },
 			CorridorLong = { w = 14, d = 28, n = true, s = true, e = false, wOpen = false, exitFace = "N" },

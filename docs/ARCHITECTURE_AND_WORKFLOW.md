@@ -12,12 +12,14 @@ c:/Users/sanch/Projects/horror-game/
 ├── default.project.json                # Rojo DataModel configuration ($ignoreUnknownInstances)
 ├── rokit.toml                          # Rokit toolchain manifest (Rojo, Wally, StyLua, Selene)
 ├── forest-preview.project.json         # Standalone preview project for Forest Cabin
+├── lobby.project.json                  # Standalone Rojo project for Dark Forest Lobby place
 ├── docs/
 │   ├── DECISIONS_AND_CHANGELOG.md      # ADRs (why decisions were made) & commit log
 │   ├── MILESTONES_AND_CHECKINS.md      # Milestone gates & recurring 4-point check-ins
 │   ├── GAME_DESIGN_AND_RESEARCH.md     # Core loop, story beats, scaling & monetization
 │   ├── ARCHITECTURE_AND_WORKFLOW.md    # Module map, Rojo rules, streaming & Git flow
 │   ├── STUDIO_ASSET_SPEC.md            # Creative Lead instance contracts & anchors
+│   ├── LOBBY_TEST_CHECKLIST.md         # Dark Forest Lobby QA checklist
 │   ├── blackpine-survey-works.md       # Bunker survey galleries & SurveyMount guide
 │   ├── milestone-3-release.md          # Milestone 3 extraction & test record
 │   └── forest-cabin-handoff.md         # Historical opening handoff notes
@@ -34,7 +36,13 @@ c:/Users/sanch/Projects/horror-game/
     │   ├── ObjectiveHUD.luau           # Unified field dossier HUD, CluePanel & center reticle
     │   ├── PrologueController.luau     # Blackpine location card, guidance & omen skip UI
     │   ├── SpectatorController.luau    # Spectator camera cycling & earned Revive Token UI
-    │   └── SprintController.luau       # Horror stamina/sprint (LeftShift/L3/touch) + FOV kick
+    │   ├── SprintController.luau       # Horror stamina/sprint (LeftShift/L3/touch) + FOV kick
+    │   └── Lobby/                      # Standalone pre-game Dark Forest Lobby client
+    │       ├── init.client.luau        # Place-guarded client bootstrap, coin HUD & bottom bar
+    │       ├── LobbyAmbience.luau      # Forest crickets & wind loop controller
+    │       ├── LobbyFrogController.luau# Frog Merchant 60 FPS idle anims, head tracking & greetings
+    │       ├── QueueHudController.luau # Play-circle HUD, countdown, avatar headshots & notices
+    │       └── ShopGuiController.luau  # Responsive ViewportFrame cosmetic Shop UI & confirm modal
     ├── server/                         # ServerScriptService/Server
     │   ├── init.server.luau            # Server bootstrap & expedition generation loop
     │   ├── InteractionRouter.luau      # Centralized ProximityPromptService validator & hold cleanup
@@ -54,6 +62,12 @@ c:/Users/sanch/Projects/horror-game/
     │   ├── FlashlightReplicator.luau   # Co-op flashlight broadcast & server FlashlightOn state
     │   ├── FunnelAnalytics.luau        # 9-stage AnalyticsService expedition funnel logger
     │   ├── MonetizationService.luau    # Cosmetic tints & idempotent ProcessReceipt revives/gifts
+    │   ├── Lobby/                      # Standalone pre-game Dark Forest Lobby server
+    │   │   ├── init.server.luau        # Place-guarded server bootstrap for lobby place
+    │   │   ├── LobbyScene.luau         # Procedural forest lighting, Frog stall, campfire & props
+    │   │   ├── PlayerDataService.luau  # DataStoreService wrapper (PlayerData_v1) + safety guards
+    │   │   ├── QueueService.luau       # Spatial play circles, Friends-only lock & reserved teleport
+    │   │   └── ShopService.luau        # Authoritative purchase/equip validation & rollback
     │   └── ForestCabin/                # Authored opening integration
     │       ├── init.server.luau        # Forest spawn, CellarKey/Hatch & SurveyLift arrival
     │       ├── CottageHardware.luau    # Hinged hatch & key hardware dressing
@@ -64,7 +78,8 @@ c:/Users/sanch/Projects/horror-game/
     └── shared/                         # ReplicatedStorage/Shared
         ├── .gitkeep
         ├── ClueData.luau               # Central lore & wall-scribble registry (7 entries)
-        ├── ShopCatalog.luau            # Flashlight tint presets & Developer Product stubs
+        ├── LobbyConfig.luau            # Central Lobby tunables (queue size, timers, place ID, audio)
+        ├── ShopCatalog.luau            # Flashlight tints, support products, character & weapon skins
         └── Typography.luau             # Calligraphic display vs utilitarian UI typography tokens
 ```
 

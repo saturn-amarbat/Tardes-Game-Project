@@ -38,8 +38,9 @@ Every milestone gate (`Gate 0`, `4A`, `4B`, `5A`, `5B`, `6A`, `6B`) verifies:
   - Added mid-run `ToadMakerSafeRoom` (`SafeRoomService`, `RunScrap`, Battery/Medkit/Revive Token vendor, `InSafeRoom` Stalker immunity).
   - Centralized `ProximityPromptService` validation via `InteractionRouter`, raycasted `ClueSystem` surface placement, `BlastLeaf` smooth tween + `"Locked — Missing Keys/Fuses"` feedback in `ExitGate`.
   - Added `SpectatorController` + `MatchScaleManager.revivePlayer` (`ClaimReviveToken` + `GiftFieldRevive`).
-- **Check-In 5B (Lobby & Monetization) — Remaining:**
-  - [ ] Build pre-run lobby/queue (1–4 players) and cosmetic/gifting client Shop UI (`ShopCatalog` tints, Toad Keycharms, target picker for `SetGiftTarget`).
+- **Check-In 5B (Lobby & Monetization) — Code Complete on `feature/lobby` / Needs Multi-Place Live Test:**
+  - [x] Build pre-run Dark Forest lobby (`lobby.project.json`, `LobbyScene`, animated Frog Merchant stall, campfire clearing, 3 play circles w/ Friends-Only support & reserved server teleport) and responsive `ViewportFrame` Shop UI (`ShopCatalog` character/weapon skins + DataStore persistence in `PlayerData_v1`).
+  - [ ] Publish dedicated Lobby Place inside the `Project Horror` universe (`122077989749573` destination) and execute [docs/LOBBY_TEST_CHECKLIST.md](file:///c:/Users/sanch/Projects/horror-game/docs/LOBBY_TEST_CHECKLIST.md).
   - [ ] Populate Creator Dashboard numeric `productId` values in [src/shared/ShopCatalog.luau](file:///c:/Users/sanch/Projects/horror-game/src/shared/ShopCatalog.luau) and add Private Server / Chaos pass support if scoped for v1.
   - [ ] **Open Polish Item:** Raise the concrete concourse ceiling lip above the cellar stairs inside [src/server/ForestCabin/Opening.rbxmx](file:///c:/Users/sanch/Projects/horror-game/src/server/ForestCabin/Opening.rbxmx) to eliminate the brief 3rd-person camera floor clip seen at `00:44` of `playtest_fixed.mp4`.
   - [ ] **Exit Gate:** Complete a 2–4 player live co-op test verifying simultaneous `ExitLever_A`/`B`, disconnect hold release, Stalker pathfinding across L-rooms, Deer Omen trigger on the trail, and mid-run revive flow.

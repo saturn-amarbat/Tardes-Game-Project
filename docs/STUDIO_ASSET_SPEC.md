@@ -41,6 +41,15 @@ ReplicatedStorage
    - Add `SurveyMount` `Attachment` (`4` studs above floor, `-Z` toward walkway) to explicitly position `SurveyGallery` cabinets, or set boolean attribute `SurveyDressing = false` to opt a template out.
    - Set `SafeRoom = true` on `ToadMakerSafeRoom` templates.
 
+### 2B. Modular Grid Prefabs (`ServerStorage/BunkerPrefabs` ↔ `assets/BunkerPrefabs/*.rbxm`)
+Verified Checkpoints 1–4 grid prefabs live in `ServerStorage/BunkerPrefabs` (synced from `assets/BunkerPrefabs/` via Rojo) and are enforced on load by `src/server/BunkerGrid/PrefabValidator.luau`:
+- **Dimensions (`BunkerGrid/Config.luau`):** `CELL = 32`, `WALL_H = 12`, `WALL_T = 1`, `DOOR_W = 8`, `DOOR_H = 9`, `HALL_W = 16`, `ROOM_COUNT = 10`.
+- **Mandatory Hierarchy per Model (`ModelStreamingMode = Atomic`):**
+  - `PrimaryPart = Floor` (`BasePart`, `Size = (32, 1, 32)` at `(0, -0.5, 0)`, walkable top `Y = 0`).
+  - All collidable structural parts strictly inside `[-16, +16]` with zero intra-tile wall overlap.
+  - **5 Hallways:** `HallDeadEnd` (`N`, `PlayerSpawn` on start tile only), `HallCorner` (`N+E`), `HallStraight` (`N+S`, `MonsterSpawn`), `HallT` (`N+E+W`, `MonsterSpawn`), `HallCross` (`N+E+S+W`, `MonsterSpawn`); hallways never contain `ScareSpawn`.
+  - **10 Active Single-Door Rooms (North `-Z` opening):** `Room_Mirror` (retains abandoned chair/table/mirror atmosphere), `Room_ModelSlot` (`ModelSlot` marker), `Room_Exit` (`Exit` marker `-Z` facing into room + clear lever zone), `Room_Safe` (`SafeRoom = true`, `SurveyDressing = false`, no `ScareSpawn`), `Room_Storage`, `Room_Fuse`, `Room_Flooded`, `Room_Study`, `Room_Generator`, `Room_Archive`. Non-safe rooms each contain interior `ScareSpawn`.
+
 ---
 
 ## 3. NPC Character Models (`ReplicatedStorage/NPCModels`)
@@ -111,3 +120,14 @@ StarterGui
 
 - `FlashlightController` binds `GameHUD.FlashlightButton.Activated` directly; on touch devices when absent, it creates a `FlashlightHUD_Fallback` (`ResetOnSpawn = true`).
 - `ObjectiveHUD`, `PrologueUI`, and `SpectatorHUD` are instantiated cleanly on `PlayerGui` (with prior-instance cleanup on init so overlays never stack).
+
+---
+
+## 7. Pre-Game Dark Forest Lobby Place (`lobby.project.json`)
+
+- **Runtime Container (`Workspace.LobbyMap`, `ModelStreamingMode = Persistent`):** Built procedurally by `src/server/Lobby/LobbyScene.luau` with zero shadow-casting decorative lights (`Shadows = false`), double boundary tree rings (`R = 85..98`), perimeter cliff mounds, and invisible collision walls (`R = 90`).
+- **Zone A (`FrogShopkeeper`):** Animated `HeadRig` (`Head`, `EyeOrb_L/R`, `Pupil_L/R`, `Eyelid_L/R`, `Tongue`), `Throat`, `ShopStall/Counter/BrowseShopPrompt` (`ButtonX` / tap), and spatial `FrogCroak` (`rbxassetid://6276863875`).
+- **Zone B (`QueuePad_1..3`):** `PadBase`, `PadGlow` (state-tinted: dim idle, amber filling, green full, red launch countdown), and `PadBillboard` (`CountLabel`, `NamesLabel`).
+- **Remotes (`ReplicatedStorage/LobbyRemotes`) & DataStore (`PlayerData_v1`):**
+  - `RequestPurchase` (`RemoteFunction`), `RequestEquip` (`RemoteEvent`), `ShopDataReply`, `PurchaseResult`, `QueueUpdate`, `QueueNotice`.
+  - Key `"Player_<userId>"` stores `{ Coins, OwnedCharacterSkins, OwnedWeaponSkins, EquippedCharacterSkin, EquippedWeaponSkin }`.

@@ -1,5 +1,12 @@
 --!strict
+local ServerScriptService = game:GetService("ServerScriptService")
 local Workspace = game:GetService("Workspace")
+
+if ServerScriptService:GetAttribute("BunkerEntryActive") == true then
+	return
+end
+ServerScriptService:SetAttribute("BunkerEntryActive", true)
+
 local SquadFall = require(script.Parent.BunkerHallways.SquadFall)
 local opening = Workspace:WaitForChild("ForestCabinOpening")
 local cottage = opening:WaitForChild("Wardens Cottage")

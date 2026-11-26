@@ -52,7 +52,7 @@ The server will bind to `http://localhost:34872`.
 To prevent data loss, conflicts, and sync desynchronization:
 1. **Disable Collaborative Editing / Script Drafts**: In Roblox Studio Game Settings, Collaborative Editing / Drafts mode must be **OFF**. Rojo expects script changes to apply directly without draft conflicts.
 2. **Partially Managed Tree (`$ignoreUnknownInstances: true`)**:
-   [default.project.json](file:///c:/Users/sanch/Projects/horror-game/default.project.json) specifies `"$ignoreUnknownInstances": true` on `Workspace`, `ReplicatedStorage`, `Lighting`, and `StarterGui`. This ensures Rojo only manages files present in `src/` and **never deletes** 3D maps, room templates, models, lighting configurations, or raw UI created in Studio Team Create.
+   [default.project.json](default.project.json) specifies `"$ignoreUnknownInstances": true` on `Workspace`, `ReplicatedStorage`, `ServerStorage`, `Lighting`, and `StarterGui`, while mapping `ServerStorage/BunkerPrefabs` to `assets/BunkerPrefabs/`. This ensures Rojo syncs tracked `.rbxm` bunker grid prefabs alongside `src/` and **never deletes** 3D maps, room templates, models, lighting configurations, or raw UI created in Studio Team Create.
 3. **No In-Studio Script Edits**: Never edit `.luau` scripts inside Roblox Studio via MCP (`multi_edit`) or the Studio script editor. All script modifications must happen on disk inside `src/` to guarantee clean Git version tracking and automated linting.
 
 ---
@@ -83,3 +83,68 @@ Detailed specifications, design documentation, and architectural guidelines are 
 - [docs/blackpine-survey-works.md](file:///c:/Users/sanch/Projects/horror-game/docs/blackpine-survey-works.md) – Bunker survey gallery environment art pass & `SurveyMount` handoff.
 - [docs/milestone-3-release.md](file:///c:/Users/sanch/Projects/horror-game/docs/milestone-3-release.md) – Milestone 3 test record & extraction notes.
 - [docs/forest-cabin-handoff.md](file:///c:/Users/sanch/Projects/horror-game/docs/forest-cabin-handoff.md) – Historical environment handoff document for the Blackpine Forest and cabin opening.
+- [docs/LOBBY_TEST_CHECKLIST.md](file:///c:/Users/sanch/Projects/horror-game/docs/LOBBY_TEST_CHECKLIST.md) – Pre-game Dark Forest Lobby QA checklist.
+
+---
+
+## Dark Forest Lobby (`feature/lobby`)
+
+The pre-game hub uses a Dark Forest night aesthetic with a giant animated Frog Merchant stall (Zone A), a central campfire clearing with sit-able logs, and four matchmaking play circles (Zone B: **1 PLAYER**, **2 PLAYERS**, **3 PLAYERS**, **4 PLAYERS**). Players spawn in the Dark Forest Lobby first (`LobbyConfig.shouldStartInLobby()`); stepping into a circle triggers a launch countdown that teleports the party to a private reserved server via `TeleportService:ReserveServer` (live Roblox) or smoothly fades & transitions into the actual game inside Roblox Studio playtests (`PLAYTEST_IN_PLACE_IN_STUDIO = true`).
+
+### Running the Lobby Place
+```bash
+rojo serve default.project.json
+# Or serve/build the standalone Lobby place:
+rojo serve lobby.project.json
+rojo build lobby.project.json -o DarkForestLobby.rbxl
+```
+> Enable **Game Settings -> Security -> Enable Studio Access to API Services** in Roblox Studio when testing `DataStoreService` persistence.
+
+### How to Add Shop Items
+All Character Skins and Weapon Skins are data-driven inside `src/shared/ShopCatalog.luau`. No UI code edits are required.
+1. Open `src/shared/ShopCatalog.luau`.
+2. Append a new `SkinEntry` table inside `characterSkins` or `weaponSkins`:
+   ```luau
+   {
+       id = "char_ranger_alt", -- unique key stored in DataStore
+       category = "Character", -- "Character" or "Weapon"
+       name = "Moss Cloak",
+       rarity = "Rare", -- Common | Uncommon | Rare | Epic | Legendary
+       price = 450, -- Coins (0 = free)
+       description = "Damp wool woven with forest moss.",
+       preview = {
+           primaryColor = Color3.fromRGB(48, 66, 44),
+           secondaryColor = Color3.fromRGB(32, 38, 32),
+           accentColor = Color3.fromRGB(168, 210, 134),
+           style = "cultist", -- ranger | miner | warden | cultist | spectre | antler | torch | blade | cleaver | shard
+       },
+   }
+   ```
+3. The server (`ShopService.luau`) and client `ViewportFrame` shop UI (`ShopGuiController.luau`) automatically load and validate the new entry.
+
+### How to Change Queue Size & Countdown
+All queue settings live at the top of `src/shared/LobbyConfig.luau`:
+- `LobbyConfig.PADS`: Configures each play circle's position, max player count (`1`, `2`, `3`, `4`), title (`"1 PLAYER"`..`"4 PLAYERS"`), and optional `friendsOnly` flag.
+- `LobbyConfig.COUNTDOWN_SECONDS`: Launch countdown seconds once triggered (default `5`).
+- `LobbyConfig.AUTO_START_TIMEOUT`: Seconds before partially filled multi-player circles launch automatically (`45`; set `0` for strict full-circle only).
+- `LobbyConfig.FRIENDS_PAD_INDEX`: Optional pad index (`1..4`) locked to the host's Roblox friends (`0` = none locked by default).
+- `LobbyConfig.PLAYTEST_IN_PLACE_IN_STUDIO`: Set `true` (default) to transition cleanly into the main game during Studio Playtest; set `false` to test `TeleportService` failure handling.
+
+### How to Set the Destination Place ID
+Open `src/shared/LobbyConfig.luau` and update `GAME_PLACE_ID`:
+```luau
+LobbyConfig.GAME_PLACE_ID = 122077989749573 -- Destination Place ID for Project Horror
+```
+Make sure both the Lobby place and destination place belong to the same Roblox Universe (Experience) so `TeleportService:ReserveServer` and `TeleportAsync` succeed in live servers. When `Project Horror` runs as a combined place with `Workspace.LobbyMap`, public joins (`PrivateServerId == ""`) start in the Lobby, and reserved servers launched from a play circle (`PrivateServerId ~= ""`) start directly in the actual game.
+
+### Procedural $8^3$ Modular Bunker Maze (R.E.P.O.-Style)
+Every time a squad enters the bunker (`MatchScaleManager.reset()` $\to$ `RoomGenerator.generate(10)`), `src/server/MazeVariations.luau` rolls a fresh seed and one of **$8^3 = 512$** structural combinations:
+- **8 Architectural Themes** (`McJannek Station`, `Headman Manor Wing`, `Hydro Turbine Sublevel`, `Core Reactor Block`, `Blackpine Sanatorium`, `Collapsed Archive`, `Cryo Storage Bay`, `Deep Survey Vault`) re-theming floors, walls, ceilings, lights, and dust motes.
+- **8 Modular Topologies** (`Spine & Pockets`, `Twin-Wing Crossroads`, `Spiral Switchback`, `Grand Atrium Hubs`, `Sublevel Bypass Grid`, `Maintenance Gauntlet`, `Shattered Labyrinth`, `Deep Vault Sector`) combining `RoomTemplates` with procedural `CrossHub`, `TJunctionL/R`, `CornerLeft/Right`, `SplitCourt`, `StepGallery`, and sealed branching wing vaults.
+- **8 Wall/Corner Decoration Sets** (`Supply Crates`, `Bio-Fungal Overgrowth`, `Power Conduits`, `Survey Archives`, `Boilers & Valves`, `Lockdown Barricades`, `Abandoned Quarters`, `Anomaly Salvage Caches`) placed via collision-safe raycasts along perimeter walls without obstructing doorways or `MainNPC_Stalker` paths.
+
+### Modular Grid Bunker Prefabs (`src/server/BunkerGrid/`, Checkpoints 1–4, Inactive)
+Checkpoints 1–4 of the uniform-grid bunker redesign are preserved on `integration/lobby-bunker-v1` (inactive in live gameplay; `RoomGenerator.generate(10)` remains active):
+- **Single Source of Truth (`src/server/BunkerGrid/Config.luau`):** Locks `CELL = 32`, `WALL_H = 12`, `WALL_T = 1`, `DOOR_W = 8`, `DOOR_H = 9`, `HALL_W = 16`, `ROOM_COUNT = 10`, Stalker Pathfinding (`AGENT_RADIUS = 2.0`, `AGENT_HEIGHT = 7.0`, `AGENT_CAN_JUMP = false`, `REPATH_INTERVAL = 0.35`), and chase-loop constraints (`1–2` loops, `3×3` minimum).
+- **4-Bit NESW Resolver, Spine & Reachability:** `DoorResolver.luau` maps all 15 4-bit door masks; `HallwaySpineV1.luau` + `RoomAssignment.luau` generate a validated 12-cell spine with a `3×3` chase loop and seeded `Room_Exit`-last ordering; `ReachabilityValidator.luau` performs bounded async `PathfindingService` checks.
+- **Tracked Binary Models (`assets/BunkerPrefabs/*.rbxm`):** Syncs all 15 active modular prefabs (`5` hallways + `10` rooms; `Room_Abandoned` consolidated into `Room_Mirror`) into `ServerStorage/BunkerPrefabs` via [default.project.json](default.project.json). *(Checkpoints 5–7 remain upcoming.)*

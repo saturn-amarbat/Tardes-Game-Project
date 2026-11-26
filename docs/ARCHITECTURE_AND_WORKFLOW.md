@@ -12,12 +12,16 @@ c:/Users/sanch/Projects/horror-game/
 ├── default.project.json                # Rojo DataModel configuration ($ignoreUnknownInstances)
 ├── rokit.toml                          # Rokit toolchain manifest (Rojo, Wally, StyLua, Selene)
 ├── forest-preview.project.json         # Standalone preview project for Forest Cabin
+├── lobby.project.json                  # Standalone Rojo project for Dark Forest Lobby place
+├── assets/
+│   └── BunkerPrefabs/                  # 16 committed .rbxm grid prefabs -> ServerStorage/BunkerPrefabs
 ├── docs/
 │   ├── DECISIONS_AND_CHANGELOG.md      # ADRs (why decisions were made) & commit log
 │   ├── MILESTONES_AND_CHECKINS.md      # Milestone gates & recurring 4-point check-ins
 │   ├── GAME_DESIGN_AND_RESEARCH.md     # Core loop, story beats, scaling & monetization
 │   ├── ARCHITECTURE_AND_WORKFLOW.md    # Module map, Rojo rules, streaming & Git flow
 │   ├── STUDIO_ASSET_SPEC.md            # Creative Lead instance contracts & anchors
+│   ├── LOBBY_TEST_CHECKLIST.md         # Dark Forest Lobby QA checklist
 │   ├── blackpine-survey-works.md       # Bunker survey galleries & SurveyMount guide
 │   ├── milestone-3-release.md          # Milestone 3 extraction & test record
 │   └── forest-cabin-handoff.md         # Historical opening handoff notes
@@ -34,11 +38,24 @@ c:/Users/sanch/Projects/horror-game/
     │   ├── ObjectiveHUD.luau           # Unified field dossier HUD, CluePanel & center reticle
     │   ├── PrologueController.luau     # Blackpine location card, guidance & omen skip UI
     │   ├── SpectatorController.luau    # Spectator camera cycling & earned Revive Token UI
-    │   └── SprintController.luau       # Horror stamina/sprint (LeftShift/L3/touch) + FOV kick
+    │   ├── SprintController.luau       # Horror stamina/sprint (LeftShift/L3/touch) + FOV kick
+    │   └── Lobby/                      # Standalone pre-game Dark Forest Lobby client
+    │       ├── init.client.luau        # Place-guarded client bootstrap, coin HUD & bottom bar
+    │       ├── LobbyAmbience.luau      # Forest crickets & wind loop controller
+    │       ├── LobbyFrogController.luau# Frog Merchant 60 FPS idle anims, head tracking & greetings
+    │       ├── QueueHudController.luau # Play-circle HUD, countdown, avatar headshots & notices
+    │       └── ShopGuiController.luau  # Responsive ViewportFrame cosmetic Shop UI & confirm modal
     ├── server/                         # ServerScriptService/Server
     │   ├── init.server.luau            # Server bootstrap & expedition generation loop
     │   ├── InteractionRouter.luau      # Centralized ProximityPromptService validator & hold cleanup
-    │   ├── RoomGenerator.luau          # Flush anchor snapping, turn-tracking & SafeRoom insertion
+    │   ├── MazeVariations.luau         # 8x8x8 (512) R.E.P.O. themes, hubs, wings & props
+    │   ├── RoomGenerator.luau          # Branching modular maze snapping, SafeRoom & bulkhead seals
+    │   ├── BunkerGrid/                 # Grid-snapped 32x32 bunker foundation (Checkpoints 1-2)
+    │   │   ├── Config.luau             # Locked CELL/doorway/wall & Stalker agent constants
+    │   │   ├── DoorResolver.luau         # 4-bit NESW door bitmask & CW rotation lookup
+    │   │   ├── PrefabLibrary.luau        # ServerStorage/BunkerPrefabs builder & loader
+    │   │   └── PrefabValidator.luau      # Structural bounds, marker & 0-overlap assertions
+    │   ├── BunkerHallways/             # Cellar hatch drop (SquadFall) & legacy hallway fallback
     │   ├── TeleportManager.luau        # Streaming-safe player & squad teleports
     │   ├── MatchScaleManager.luau      # 1–4 player scaling, run lifecycle, mid-run revives
     │   ├── ObjectivePickups.luau       # Server-locked key & ceramic fuse spawns
@@ -54,6 +71,12 @@ c:/Users/sanch/Projects/horror-game/
     │   ├── FlashlightReplicator.luau   # Co-op flashlight broadcast & server FlashlightOn state
     │   ├── FunnelAnalytics.luau        # 9-stage AnalyticsService expedition funnel logger
     │   ├── MonetizationService.luau    # Cosmetic tints & idempotent ProcessReceipt revives/gifts
+    │   ├── Lobby/                      # Standalone pre-game Dark Forest Lobby server
+    │   │   ├── init.server.luau        # Place-guarded server bootstrap for lobby place
+    │   │   ├── LobbyScene.luau         # Procedural forest lighting, Frog stall, campfire & props
+    │   │   ├── PlayerDataService.luau  # DataStoreService wrapper (PlayerData_v1) + safety guards
+    │   │   ├── QueueService.luau       # Spatial play circles, Friends-only lock & reserved teleport
+    │   │   └── ShopService.luau        # Authoritative purchase/equip validation & rollback
     │   └── ForestCabin/                # Authored opening integration
     │       ├── init.server.luau        # Forest spawn, CellarKey/Hatch & SurveyLift arrival
     │       ├── CottageHardware.luau    # Hinged hatch & key hardware dressing
@@ -64,7 +87,8 @@ c:/Users/sanch/Projects/horror-game/
     └── shared/                         # ReplicatedStorage/Shared
         ├── .gitkeep
         ├── ClueData.luau               # Central lore & wall-scribble registry (7 entries)
-        ├── ShopCatalog.luau            # Flashlight tint presets & Developer Product stubs
+        ├── LobbyConfig.luau            # Central Lobby tunables (queue size, timers, place ID, audio)
+        ├── ShopCatalog.luau            # Flashlight tints, support products, character & weapon skins
         └── Typography.luau             # Calligraphic display vs utilitarian UI typography tokens
 ```
 
@@ -80,12 +104,12 @@ c:/Users/sanch/Projects/horror-game/
 - **Role**: Centralized `ProximityPromptService` dispatcher (`PromptTriggered`, `PromptButtonHoldBegan`, `PromptButtonHoldEnded`, `TriggerEnded`).
 - **Why**: Prevents scattered per-part listeners, validates `DungeonEntered == true`, living `HumanoidRootPart`, and `(root.Position - targetPart.Position).Magnitude <= MaxActivationDistance + 4`, and automatically releases lever holds on `PlayerRemoving` or `Humanoid.Died`.
 
-### `RoomGenerator.luau`
-- **Role**: Procedural room generation using flush front-face anchor snapping and turn-direction tracking.
-- **Snapping & Anti-Looping Rules**:
-  - Aligns `targetEntranceCF = currentExitCF * CFrame.Angles(0, math.pi, 0)` and pivots rooms into `Workspace.GeneratedDungeon` with `ModelStreamingMode = Enum.ModelStreamingMode.Atomic`.
-  - Computes `getRoomTurnSign(entrance, exit)` and forbids two consecutive left or right turns (`turnSign == lastTurnSign`) alongside `GetPartBoundsInBox` overlap checks.
-  - Inserts `ToadMakerSafeRoom` at slot `ceil(numRooms / 2)` (Room `5` of `10`), using a Studio template if present or a built-in `Atomic` fallback.
+### `RoomGenerator.luau` & `MazeVariations.luau`
+- **Role**: Procedural $8^3$ (`512`-variation) R.E.P.O.-style modular maze assembly across 8 Themes × 8 Branching Topologies × 8 Decoration Loadouts.
+- **Snapping, Branching & Waterproof Sealing**:
+  - Builds a guaranteed traversable main spine (`targetEntranceCF = parentSocket.CFrame * CFrame.Angles(0, math.pi, 0)`) from `Station 01` (`Room_01_*` for `SurveyLift`/`MaintenanceBay`) through `ToadMakerSafeRoom` (`ceil(numRooms / 2)`) to the final extraction room (`ExitGate`).
+  - Grows 1–2 room branching wings off `CrossHub`, `TJunctionL/R`, `SplitCourt`, and `StepGallery` side sockets using `GetPartBoundsInBox` collision checks, sealing all unexpanded hub sockets and branch leaf ends with solid reinforced bulkheads (`sealSocket`).
+  - Applies active theme palettes/lights and collision-verified perimeter wall props (`MazeDecor`) across all rooms (`1..#orderedRooms`), preserving `Room_01_*` clearance (`14` studs) and open `>= 4.2`-stud AI navigation aisles.
 
 ### `TeleportManager.luau`
 - **Role**: Server-authoritative teleportation with `StreamingEnabled` safety (`Player:RequestStreamAroundAsync`, post-yield character revalidation, and `2.5`-stud squad lateral offsets).
@@ -131,7 +155,7 @@ c:/Users/sanch/Projects/horror-game/
 
 ## 4. Partially Managed Rojo & Team Create Rules
 
-[default.project.json](file:///c:/Users/sanch/Projects/horror-game/default.project.json) uses `"$ignoreUnknownInstances": true` on `Workspace`, `ReplicatedStorage`, `Lighting`, and `StarterGui`. Rojo never deletes Team Create assets, Collaborative Editing / Drafts stays **OFF**, and all `.luau` edits happen strictly on disk in `src/`.
+[default.project.json](../default.project.json) uses `"$ignoreUnknownInstances": true` on `Workspace`, `ReplicatedStorage`, `ServerStorage`, `Lighting`, and `StarterGui`, while syncing tracked `.rbxm` grid prefabs from `assets/BunkerPrefabs/` into `ServerStorage/BunkerPrefabs`. Rojo never deletes Team Create assets, Collaborative Editing / Drafts stays **OFF**, and all `.luau` edits happen strictly on disk in `src/`.
 
 ---
 

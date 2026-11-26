@@ -231,8 +231,23 @@ do
 end
 
 local function assignStart(player: Player)
+	if script.Parent:FindFirstChild("Lobby") ~= nil and game.PrivateServerId == "" then
+		if Workspace:GetAttribute("GameActive") ~= true and player:GetAttribute("InGame") ~= true then
+			return
+		end
+	end
 	player.RespawnLocation = start
 end
+start.Enabled = not (
+	script.Parent:FindFirstChild("Lobby") ~= nil
+	and game.PrivateServerId == ""
+	and Workspace:GetAttribute("GameActive") ~= true
+)
+Workspace:GetAttributeChangedSignal("GameActive"):Connect(function()
+	if Workspace:GetAttribute("GameActive") == true then
+		start.Enabled = true
+	end
+end)
 Players.PlayerAdded:Connect(assignStart)
 for _, player in Players:GetPlayers() do
 	assignStart(player)

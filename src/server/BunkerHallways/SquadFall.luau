@@ -14,13 +14,23 @@ type Rider = {
 	streamed: boolean,
 }
 local SquadFall = {}
-local remote = Instance.new("RemoteEvent")
-remote.Name = "BunkerFall"
-remote.Parent = ReplicatedStorage
+local remoteInst = ReplicatedStorage:FindFirstChild("BunkerFall")
+local remote: RemoteEvent
+if remoteInst and remoteInst:IsA("RemoteEvent") then
+	remote = remoteInst
+else
+	local created = Instance.new("RemoteEvent")
+	created.Name = "BunkerFall"
+	created.Parent = ReplicatedStorage
+	remote = created
+end
 local generation = 0
 local busy = false
 
 local function living(player: Player): (Model?, BasePart?)
+	if Workspace:GetAttribute("LobbyModeActive") == true and player:GetAttribute("InGame") ~= true then
+		return nil, nil
+	end
 	if player:GetAttribute("SittingOut") or player:GetAttribute("DungeonEntered") then
 		return nil, nil
 	end
@@ -32,6 +42,7 @@ local function living(player: Player): (Model?, BasePart?)
 	end
 	return nil, nil
 end
+
 local function valid(r: Rider, expedition: any): boolean
 	local character, root = living(r.player)
 	return Workspace:GetAttribute("ExpeditionNumber") == expedition
@@ -40,39 +51,48 @@ local function valid(r: Rider, expedition: any): boolean
 		and root == r.root
 end
 
-function SquadFall.attach(hatch: BasePart, lift: BasePart): () -> ()
-	local layout = Layout.get()
-	local landing = layout.landing
-	local exitDoor = layout.rooms[10]:FindFirstChild("Exit") :: BasePart
-	local returnPrompt = Instance.new("ProximityPrompt")
-	returnPrompt.ActionText = "Continue to survey lift"
-	returnPrompt.ObjectText = "Exit airlock"
-	returnPrompt.RequiresLineOfSight = false
-	returnPrompt.Parent = exitDoor
-	local returning: { [Player]: boolean } = {}
-	returnPrompt.Triggered:Connect(function(player)
-		local char, root = living(player)
-		if not char or not root or returning[player] or (root.Position - exitDoor.Position).Magnitude > 12 then
-			return
-		end
-		returning[player] = true
-		local probe = RaycastParams.new()
-		probe.FilterType = Enum.RaycastFilterType.Include
-		probe.FilterDescendantsInstances = { lift.Parent :: Instance }
-		probe.RespectCanCollide = true
-		local target = lift.Position + Vector3.new(0, 3, 5)
-		local hit = Workspace:Raycast(target, -Vector3.yAxis * 12, probe)
-		if hit and hit.Normal.Y > 0.8 then
-			local pos = hit.Position + Vector3.yAxis * 3
-			local ok = pcall(function()
-				player:RequestStreamAroundAsync(pos, Config.StreamTimeout)
-			end)
-			if ok and living(player) == char and (root.Position - exitDoor.Position).Magnitude <= 12 then
-				char:PivotTo(CFrame.new(pos))
+-- Resolves the entry doorway floor inside the active R.E.P.O.-style GeneratedDungeon.
+local function findMazeLandingCF(): CFrame?
+	local deadline = os.clock() + 4
+	while os.clock() < deadline do
+		local dungeon = Workspace:FindFirstChild("GeneratedDungeon")
+		if dungeon then
+			local first: Model? = nil
+			for _, room in dungeon:GetChildren() do
+				if room:IsA("Model") and string.match(room.Name, "^Room_01_") then
+					first = room
+					break
+				end
+			end
+			if first then
+				local entrance = first:FindFirstChild("Entrance")
+				if entrance and entrance:IsA("BasePart") then
+					local ray = RaycastParams.new()
+					ray.FilterType = Enum.RaycastFilterType.Include
+					ray.FilterDescendantsInstances = { first }
+					ray.RespectCanCollide = true
+					for _, dir in { 1, -1 } do
+						local probe = entrance.Position + entrance.CFrame.LookVector * (4 * dir)
+						local hit = Workspace:Raycast(probe + Vector3.yAxis * 3, -Vector3.yAxis * 12, ray)
+						if hit and hit.Normal.Y > 0.65 then
+							local flatForward =
+								Vector3.new(entrance.CFrame.LookVector.X, 0, entrance.CFrame.LookVector.Z)
+							local lookTarget = hit.Position
+								+ Vector3.yAxis * 3.5
+								+ (if flatForward.Magnitude > 0.1 then flatForward.Unit else Vector3.zAxis)
+							return CFrame.lookAt(hit.Position + Vector3.yAxis * 3.5, lookTarget)
+						end
+					end
+				end
 			end
 		end
-		returning[player] = nil
-	end)
+		task.wait(0.1)
+	end
+	return nil
+end
+
+function SquadFall.attach(hatch: BasePart, lift: BasePart): () -> ()
+	local _unusedLift = lift
 
 	-- A shared group barrier keeps every eligible rider on the same cinematic clock.
 	return function()
@@ -80,6 +100,16 @@ function SquadFall.attach(hatch: BasePart, lift: BasePart): () -> ()
 			return
 		end
 		local expedition = Workspace:GetAttribute("ExpeditionNumber")
+		local mazeLandingCF = findMazeLandingCF()
+		local baseLandingCF: CFrame
+		if mazeLandingCF then
+			baseLandingCF = mazeLandingCF
+		else
+			local layout = Layout.get()
+			local landing = layout.landing
+			baseLandingCF = landing.CFrame * CFrame.new(0, landing.Size.Y / 2 + 3.5, 0)
+		end
+
 		local riders: { Rider } = {}
 		for _, player in Players:GetPlayers() do
 			local char, root = living(player)
@@ -89,13 +119,12 @@ function SquadFall.attach(hatch: BasePart, lift: BasePart): () -> ()
 				and (not char:GetAttribute("BunkerLanded") or char:GetAttribute("BunkerExpedition") ~= expedition)
 			then
 				local i = #riders
-				local spread =
-					Vector3.new((i % 2 - 0.5) * 5, landing.Size.Y / 2 + 3.5, (math.floor(i / 2) % 2 - 0.5) * 5)
+				local spread = Vector3.new((i % 2 - 0.5) * 2.2, 0, math.floor(i / 2) * 2.2)
 				table.insert(riders, {
 					player = player,
 					character = char,
 					root = root,
-					destination = landing.CFrame * CFrame.new(spread),
+					destination = baseLandingCF * CFrame.new(spread),
 					anchored = root.Anchored,
 					streamed = false,
 				})
@@ -146,9 +175,8 @@ function SquadFall.attach(hatch: BasePart, lift: BasePart): () -> ()
 				r.root.AssemblyAngularVelocity = Vector3.zero
 				r.character:SetAttribute("BunkerExpedition", expedition)
 				r.character:SetAttribute("BunkerLanded", true)
+				r.player:SetAttribute("DungeonEntered", true)
 				r.root.Anchored = r.anchored
-				-- While a slow client catches up, the server simulates the landing
-				-- against its already-present floor. A stalled request cannot block the group.
 				if not r.streamed and not r.anchored and r.root:CanSetNetworkOwnership() then
 					r.root:SetNetworkOwner(nil)
 					task.spawn(function()

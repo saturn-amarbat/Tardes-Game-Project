@@ -4,6 +4,7 @@
 - **Genre:** 1–4 player co-op procedural room-escape horror on Roblox.
 - **Tone & Aesthetic:** Dark, suspenseful horror blending a grounded forest/cottage descent into an abandoned 50-year Cold War bunker with a *Doctor Who* "bigger on the inside" spatial paradox leading into dark rusty wood cabin rooms and complex spaces.
 - **Core Gameplay Loop:**
+  0. **Lobby-First Entry:** Players joining Tardes normally enter the Dark Forest Lobby (`Workspace.LobbyMap`, Frog Merchant shop, campfire social area, and 1P–4P matchmaking circles). Entry into the horror expedition is initiated voluntarily through the matchmaking queue and countdown.
   1. **Opening & Descent:** Start in the dark forest (`ForestStart`) → pass `Wardens Cottage` (`CellarKey` → `CellarHatch`) → descend through the bunker/galleries to `SurveyLift` → transition via `TeleportManager` (`RequestStreamAroundAsync`) into procedurally generated rooms (`DungeonEntered`).
   2. **Exploration & Survival:** Navigate rooms generated on demand (`ModelStreamingMode.Atomic`, snapped via `Entrance`/`Exit` anchors with overlap checks) using a *Slender Man*-style layered flashlight (`SpotLight` cone + `PointLight` fill for mobile/low-graphics legibility), collect *The Forest* / Timmy-style lore clues/scribbles (shared squad credit), and gather required run objectives (keys/fuses).
   3. **Mid-Run Safe Room:** Reach the Toad-Maker safe area to catch your breath, interact with passive toads, and spend run currency on supplies/tools.
@@ -32,3 +33,4 @@
 
 ## 5. Engineering & Agent Boundaries
 - `AGENTS.md` governs repository and AI tool rules: edit `.luau` scripts **only** on disk in `src/` (`--!strict`), pass `stylua --check src` and `selene src`, keep `"$ignoreUnknownInstances": true` in `default.project.json`, never edit Rojo-synced scripts inside Studio via MCP, and branch from a freshly fetched `origin/main`.
+- **Gameplay Preservation:** The `BunkerGrid` redesign is strictly a scoped replacement of the bunker dungeon generation subsystem. Existing lobby entry, player movement, stamina/sprinting, flashlight optics/battery, HUD, audio, progression, and multiplayer systems must be preserved.

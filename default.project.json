@@ -13,6 +13,14 @@
         "$path": "src/shared"
       }
     },
+    "ServerStorage": {
+      "$className": "ServerStorage",
+      "$ignoreUnknownInstances": true,
+      "BunkerPrefabs": {
+        "$path": "assets/BunkerPrefabs",
+        "$ignoreUnknownInstances": true
+      }
+    },
     "ServerScriptService": {
       "$className": "ServerScriptService",
       "Server": {

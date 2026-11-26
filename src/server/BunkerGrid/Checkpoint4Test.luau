@@ -171,8 +171,7 @@ local function runHallwayAndLoopTests(runId: string): (number, number, boolean)
 		{ "2,2", "3,2" },
 	}
 
-	local minB = Vector3.new(-500, 0, -500)
-	local maxB = Vector3.new(500, 200, 500)
+	local cells = ReachabilityValidator.collectFloorCells(container)
 	local bothSidesOk = true
 	for _, side in { northEastEdges, westSouthEdges } do
 		for _, edge in side do
@@ -181,8 +180,7 @@ local function runHallwayAndLoopTests(runId: string): (number, number, boolean)
 			local res = ReachabilityValidator.validateSingleRoute(
 				pA,
 				pB,
-				minB,
-				maxB,
+				cells,
 				edge[1] .. "->" .. edge[2],
 				Config.NAVMESH_POLL_TIMEOUT,
 				Config.NAVMESH_POLL_INTERVAL,
@@ -195,6 +193,16 @@ local function runHallwayAndLoopTests(runId: string): (number, number, boolean)
 				bothSidesOk = false
 				warn(
 					string.format("Loop edge FAIL %s->%s: %s len=%.2f", edge[1], edge[2], res.outcome, res.routeLength)
+				)
+			else
+				print(
+					string.format(
+						"LoopEdge %s->%s: PASS len=%.2f wp=%d",
+						edge[1],
+						edge[2],
+						res.routeLength,
+						res.waypointCount
+					)
 				)
 			end
 		end
@@ -245,56 +253,116 @@ local function runNegativeTests(runId: string): boolean
 	})
 	assert(recoveredReport.results[1].outcome == "Success", "Room failed to recover after removing blocker!")
 
-	-- 8.2 Invalid destination
+	-- 8.2 Invalid destination (outside entire dungeon)
 	local invalidReport = waitForValidation({
 		container = container,
 		playerSpawn = playerSpawn,
 		targets = { { id = "OutOfBounds", model = room1 :: Model, position = Vector3.new(9999, 38, 9999) } },
 		runId = runId .. "_invalid",
 	})
-	assert(invalidReport.results[1].outcome == "InvalidEndpoint", "Expected InvalidEndpoint")
+	assert(invalidReport.results[1].outcome == "InvalidEndpoint", "Expected InvalidEndpoint for out-of-bounds")
 
-	-- 8.3 Bounded timeout with deterministic computeFn
-	local timeoutReport = waitForValidation({
+	-- 8.2b Target inside overall AABB but in unoccupied solid (2,1) chase-loop center
+	local loopCenterPos = Vector3.new(2 * Config.CELL, 39, -160 + 1 * Config.CELL)
+	local loopCenterReport = waitForValidation({
 		container = container,
 		playerSpawn = playerSpawn,
-		targets = { { id = "TimeoutTarget", model = room1 :: Model } },
-		runId = runId .. "_timeout",
-		timeoutSeconds = 0.4,
-		pollIntervalSeconds = 0.2,
+		targets = { { id = "LoopCenter", model = room1 :: Model, position = loopCenterPos } },
+		runId = runId .. "_loopCenter",
+	})
+	assert(loopCenterReport.results[1].outcome == "InvalidEndpoint", "Expected InvalidEndpoint for solid (2,1) center")
+
+	-- 8.2c Target model not belonging to generated dungeon
+	local foreignModel = Instance.new("Model")
+	foreignModel.Name = "__ForeignModel"
+	foreignModel.Parent = Workspace
+	local foreignReport = waitForValidation({
+		container = container,
+		playerSpawn = playerSpawn,
+		targets = { { id = "ForeignModel", model = foreignModel, position = Vector3.new(32, 39, -192) } },
+		runId = runId .. "_foreign",
+	})
+	foreignModel:Destroy()
+	assert(foreignReport.results[1].outcome == "InvalidEndpoint", "Expected InvalidEndpoint for foreign model")
+
+	-- 8.2d Invalid start marker (not in container)
+	local badStart = Instance.new("Part")
+	badStart.Name = "__BadStart"
+	badStart.Parent = Workspace
+	local badStartReport = waitForValidation({
+		container = container,
+		playerSpawn = badStart,
+		targets = { { id = "BadStartTarget", model = room1 :: Model } },
+		runId = runId .. "_badStart",
+	})
+	badStart:Destroy()
+	assert(badStartReport.results[1].outcome == "InvalidEndpoint", "Expected InvalidEndpoint for bad start marker")
+
+	-- 8.2e Route attempting to cross solid (2,1) loop center
+	local cells = ReachabilityValidator.collectFloorCells(container)
+	local crossesSolid = ReachabilityValidator.isRouteInOccupiedCells({
+		Vector3.new(1 * Config.CELL, 39, -160 + 1 * Config.CELL),
+		loopCenterPos,
+		Vector3.new(3 * Config.CELL, 39, -160 + 1 * Config.CELL),
+	}, cells)
+	assert(not crossesSolid, "Expected route crossing solid (2,1) center to be rejected")
+
+	-- 8.3 Late-success deadline rejection (completes after deadline -> must return Timeout, not Success)
+	local lateReport = waitForValidation({
+		container = container,
+		playerSpawn = playerSpawn,
+		targets = { { id = "LateSuccess", model = room1 :: Model } },
+		runId = runId .. "_lateSuccess",
+		timeoutSeconds = 0.25,
+		pollIntervalSeconds = 0.1,
 		computeFn = function(_p, _s, _t)
-			task.wait(0.25)
+			task.wait(0.35)
 			return true, nil
 		end,
 	})
 	assert(
-		timeoutReport.results[1].outcome == "Timeout" or timeoutReport.results[1].outcome == "NoPath",
-		"Expected Timeout/NoPath"
+		lateReport.results[1].outcome == "Timeout",
+		"Late completion must return Timeout, got " .. lateReport.results[1].outcome
 	)
+	assert(lateReport.results[1].attempts == 1, "No new attempt should start after deadline")
 
-	-- 8.4 Stale generation cancellation
-	local staleFired = false
-	local handleA = ReachabilityValidator.validateAsync({
+	-- 8.3b ComputeAsync exception
+	local errReport = waitForValidation({
 		container = container,
 		playerSpawn = playerSpawn,
-		targets = { { id = "GenA", model = room1 :: Model } },
-		runId = runId .. "_genA",
+		targets = { { id = "ComputeErr", model = room1 :: Model } },
+		runId = runId .. "_computeErr",
+		computeFn = function(_p, _s, _t)
+			return false, "Mock ComputeAsync error"
+		end,
+	})
+	assert(errReport.results[1].outcome == "ComputeError", "Expected ComputeError")
+
+	-- 8.4 Stale generation WITHOUT explicit cancel()
+	local staleNoCancelFired = false
+	ReachabilityValidator.validateAsync({
+		container = container,
+		playerSpawn = playerSpawn,
+		targets = { { id = "GenA_NoCancel", model = room1 :: Model } },
+		runId = runId .. "_genA_nc",
 		computeFn = function(_p, _s, _t)
 			task.wait(0.3)
 			return true, nil
 		end,
 	}, function()
-		staleFired = true
+		staleNoCancelFired = true
 	end)
-	handleA.cancel()
 	waitForValidation({
 		container = container,
 		playerSpawn = playerSpawn,
-		targets = { { id = "GenB", model = room1 :: Model } },
-		runId = runId .. "_genB",
+		targets = { { id = "GenB_NoCancel", model = room1 :: Model } },
+		runId = runId .. "_genB_nc",
 	})
 	task.wait(0.35)
-	assert(not staleFired, "Stale generation A callback fired!")
+	assert(not staleNoCancelFired, "Stale generation A (without explicit cancel) fired callback!")
+
+	print("Late-success timeout regression: PASS")
+	print("Navigation region validation: PASS")
 
 	destroyRunContainers(runId)
 	return true

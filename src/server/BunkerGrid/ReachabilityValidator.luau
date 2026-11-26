@@ -69,9 +69,18 @@ export type ValidationHandle = {
 	cancel: () -> (),
 }
 
+export type FloorCell = {
+	model: Model,
+	floor: BasePart,
+	cf: CFrame,
+	halfX: number,
+	halfZ: number,
+}
+
 local FLOOR_CLEARANCE_Y = 0.5
 local ENDPOINT_TOLERANCE = 6.0
-local BOUNDS_PAD = 4.0
+local CELL_PAD = 0.25
+local SEGMENT_SAMPLE_STEP = 4.0
 
 local activeRunId: string? = nil
 
@@ -84,35 +93,64 @@ local function createStalkerPath(): Path
 	})
 end
 
-local function computeContainerBounds(container: Instance): (Vector3, Vector3)
-	local minV = Vector3.new(math.huge, math.huge, math.huge)
-	local maxV = Vector3.new(-math.huge, -math.huge, -math.huge)
-	for _, desc in container:GetDescendants() do
-		if desc:IsA("BasePart") and desc.Name == "Floor" then
-			local half = desc.Size * 0.5
-			local pos = desc.Position
-			minV = Vector3.new(
-				math.min(minV.X, pos.X - half.X),
-				math.min(minV.Y, pos.Y - 1),
-				math.min(minV.Z, pos.Z - half.Z)
-			)
-			maxV = Vector3.new(
-				math.max(maxV.X, pos.X + half.X),
-				math.max(maxV.Y, pos.Y + Config.WALL_H + 2),
-				math.max(maxV.Z, pos.Z + half.Z)
-			)
+function ReachabilityValidator.collectFloorCells(container: Instance): { FloorCell }
+	local cells: { FloorCell } = {}
+	for _, child in container:GetChildren() do
+		if child:IsA("Model") then
+			local floor = child.PrimaryPart or child:FindFirstChild("Floor")
+			if floor ~= nil and floor:IsA("BasePart") then
+				table.insert(cells, {
+					model = child,
+					floor = floor,
+					cf = floor.CFrame,
+					halfX = floor.Size.X * 0.5,
+					halfZ = floor.Size.Z * 0.5,
+				})
+			end
 		end
 	end
-	return minV, maxV
+	return cells
 end
 
-local function isWithinBounds(pt: Vector3, minB: Vector3, maxB: Vector3): boolean
-	return pt.X >= minB.X - BOUNDS_PAD
-		and pt.X <= maxB.X + BOUNDS_PAD
-		and pt.Y >= minB.Y - BOUNDS_PAD
-		and pt.Y <= maxB.Y + BOUNDS_PAD
-		and pt.Z >= minB.Z - BOUNDS_PAD
-		and pt.Z <= maxB.Z + BOUNDS_PAD
+function ReachabilityValidator.isPointInOccupiedCells(pt: Vector3, cells: { FloorCell }): boolean
+	for _, cell in cells do
+		local rel = cell.cf:PointToObjectSpace(pt)
+		if
+			math.abs(rel.X) <= cell.halfX + CELL_PAD
+			and math.abs(rel.Z) <= cell.halfZ + CELL_PAD
+			and rel.Y >= -0.5
+			and rel.Y <= Config.WALL_H + 2.0
+		then
+			return true
+		end
+	end
+	return false
+end
+
+function ReachabilityValidator.isRouteInOccupiedCells(pts: { Vector3 }, cells: { FloorCell }): boolean
+	if #pts == 0 then
+		return false
+	end
+	for i, pt in pts do
+		if not ReachabilityValidator.isPointInOccupiedCells(pt, cells) then
+			return false
+		end
+		if i > 1 then
+			local prev = pts[i - 1]
+			local seg = pt - prev
+			local len = seg.Magnitude
+			if len > SEGMENT_SAMPLE_STEP then
+				local steps = math.floor(len / SEGMENT_SAMPLE_STEP)
+				for s = 1, steps do
+					local sample = prev + seg * (s / (steps + 1))
+					if not ReachabilityValidator.isPointInOccupiedCells(sample, cells) then
+						return false
+					end
+				end
+			end
+		end
+	end
+	return true
 end
 
 function ReachabilityValidator.findWalkablePoint(model: Model, localOffset: Vector3?): Vector3?
@@ -145,8 +183,7 @@ end
 function ReachabilityValidator.validateSingleRoute(
 	startPos: Vector3,
 	targetPos: Vector3?,
-	minB: Vector3,
-	maxB: Vector3,
+	cells: { FloorCell },
 	id: string,
 	timeoutSeconds: number,
 	pollIntervalSeconds: number,
@@ -154,7 +191,12 @@ function ReachabilityValidator.validateSingleRoute(
 	computeFn: ComputeFn?
 ): RouteResult
 	local t0 = os.clock()
-	if targetPos == nil or not isWithinBounds(startPos, minB, maxB) or not isWithinBounds(targetPos, minB, maxB) then
+	if
+		#cells == 0
+		or targetPos == nil
+		or not ReachabilityValidator.isPointInOccupiedCells(startPos, cells)
+		or not ReachabilityValidator.isPointInOccupiedCells(targetPos, cells)
+	then
 		return {
 			id = id,
 			outcome = "InvalidEndpoint",
@@ -168,7 +210,7 @@ function ReachabilityValidator.validateSingleRoute(
 			startPosition = startPos,
 			targetPosition = targetPos,
 			waypoints = {},
-			errorMessage = "Start or target outside container bounds",
+			errorMessage = "Start or target outside occupied dungeon cells",
 		}
 	end
 
@@ -196,7 +238,7 @@ function ReachabilityValidator.validateSingleRoute(
 			}
 		end
 
-		if (os.clock() - t0) >= timeoutSeconds and attempts > 0 then
+		if (os.clock() - t0) >= timeoutSeconds then
 			return {
 				id = id,
 				outcome = "Timeout",
@@ -210,7 +252,7 @@ function ReachabilityValidator.validateSingleRoute(
 				startPosition = startPos,
 				targetPosition = targetPos,
 				waypoints = {},
-				errorMessage = "Exceeded NAVMESH_POLL_TIMEOUT",
+				errorMessage = "Deadline reached before attempt",
 			}
 		end
 
@@ -218,6 +260,7 @@ function ReachabilityValidator.validateSingleRoute(
 		local path = createStalkerPath()
 		local ok, errMsg = execCompute(path, startPos, targetPos)
 
+		-- Check cancellation immediately after yielding computation
 		if isCancelled() then
 			return {
 				id = id,
@@ -233,6 +276,25 @@ function ReachabilityValidator.validateSingleRoute(
 				targetPosition = targetPos,
 				waypoints = {},
 				errorMessage = "Cancelled during ComputeAsync",
+			}
+		end
+
+		-- Check deadline immediately after ComputeAsync returns (never accept late completion)
+		if (os.clock() - t0) >= timeoutSeconds then
+			return {
+				id = id,
+				outcome = "Timeout",
+				pathStatus = if ok then path.Status else nil,
+				attempts = attempts,
+				elapsedSeconds = os.clock() - t0,
+				waypointCount = 0,
+				jumpWaypointCount = 0,
+				routeLength = 0,
+				endpointDistance = math.huge,
+				startPosition = startPos,
+				targetPosition = targetPos,
+				waypoints = {},
+				errorMessage = "ComputeAsync completed after deadline",
 			}
 		end
 
@@ -261,14 +323,10 @@ function ReachabilityValidator.validateSingleRoute(
 			local pts: { Vector3 } = {}
 			local jumpCount = 0
 			local routeLen = 0
-			local allInBounds = true
 
 			for i, wp in rawWaypoints do
 				if wp.Action == Enum.PathWaypointAction.Jump then
 					jumpCount += 1
-				end
-				if not isWithinBounds(wp.Position, minB, maxB) then
-					allInBounds = false
 				end
 				if i > 1 then
 					routeLen += (wp.Position - rawWaypoints[i - 1].Position).Magnitude
@@ -276,8 +334,9 @@ function ReachabilityValidator.validateSingleRoute(
 				table.insert(pts, wp.Position)
 			end
 
+			local allInRegion = ReachabilityValidator.isRouteInOccupiedCells(pts, cells)
 			local endDist = if #pts > 0 then (pts[#pts] - targetPos).Magnitude else math.huge
-			if #pts > 0 and jumpCount == 0 and allInBounds and endDist <= ENDPOINT_TOLERANCE then
+			if #pts > 0 and jumpCount == 0 and allInRegion and endDist <= ENDPOINT_TOLERANCE then
 				return {
 					id = id,
 					outcome = "Success",
@@ -292,6 +351,22 @@ function ReachabilityValidator.validateSingleRoute(
 					targetPosition = targetPos,
 					waypoints = pts,
 					errorMessage = nil,
+				}
+			elseif not allInRegion then
+				return {
+					id = id,
+					outcome = "InvalidEndpoint",
+					pathStatus = path.Status,
+					attempts = attempts,
+					elapsedSeconds = os.clock() - t0,
+					waypointCount = #pts,
+					jumpWaypointCount = jumpCount,
+					routeLength = routeLen,
+					endpointDistance = endDist,
+					startPosition = startPos,
+					targetPosition = targetPos,
+					waypoints = pts,
+					errorMessage = "Route left occupied dungeon cells",
 				}
 			end
 		end
@@ -338,15 +413,14 @@ function ReachabilityValidator.validateAsync(
 
 	task.spawn(function()
 		local tStart = os.clock()
-		local minB, maxB = computeContainerBounds(request.container)
+		local cells = ReachabilityValidator.collectFloorCells(request.container)
+		local startValid = request.playerSpawn:IsDescendantOf(request.container)
 		local startModel = request.playerSpawn.Parent
-		local startPos: Vector3? = if startModel and startModel:IsA("Model")
+		local startPos: Vector3? = if startValid
+				and startModel
+				and startModel:IsA("Model")
 			then ReachabilityValidator.findWalkablePoint(startModel)
-			else Vector3.new(
-				request.playerSpawn.Position.X,
-				request.playerSpawn.Position.Y,
-				request.playerSpawn.Position.Z
-			)
+			else nil
 
 		local timeoutSec = request.timeoutSeconds or Config.NAVMESH_POLL_TIMEOUT
 		local pollSec = request.pollIntervalSeconds or Config.NAVMESH_POLL_INTERVAL
@@ -357,12 +431,14 @@ function ReachabilityValidator.validateAsync(
 			if isStale() then
 				break
 			end
-			local targetPos = target.position or ReachabilityValidator.findWalkablePoint(target.model)
+			local targetOwned = target.model:IsDescendantOf(request.container)
+			local targetPos = if targetOwned
+				then (target.position or ReachabilityValidator.findWalkablePoint(target.model))
+				else nil
 			local res = ReachabilityValidator.validateSingleRoute(
 				startPos or Vector3.zero,
-				targetPos,
-				minB,
-				maxB,
+				if startPos ~= nil then targetPos else nil,
+				cells,
 				target.id,
 				timeoutSec,
 				pollSec,

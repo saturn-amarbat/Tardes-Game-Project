@@ -303,20 +303,19 @@ local function validateAssignmentResult(layout: HallwaySpineV1.SpineLayout, res:
 	assert(res.orderedRooms[1].category == "Standard", "rooms[1] must be Standard")
 	assert(res.orderedRooms[10].prefabName == "Room_Exit", "rooms[10] must be Room_Exit")
 
+	local socketById: { [string]: HallwaySpineV1.RoomSocket } = {}
+	for _, s in layout.sockets do
+		socketById[s.id] = s
+	end
+
 	local seenTypes: { [string]: boolean } = {}
 	local seenSockets: { [string]: boolean } = {}
 	local specialCount = 0
 	local standardCount = 0
 	local mirrorSock: HallwaySpineV1.RoomSocket? = nil
 	local modelSlotSock: HallwaySpineV1.RoomSocket? = nil
+	local reservedIds: { [string]: boolean } = {}
 	local maxDist = layout.stats.maxSocketDist
-
-	local maxNonReservedDist = -1
-	for _, rm in res.orderedRooms do
-		if not rm.reserved and rm.socket.socketDist > maxNonReservedDist then
-			maxNonReservedDist = rm.socket.socketDist
-		end
-	end
 
 	for idx, rm in res.orderedRooms do
 		assert(rm.index == idx, "Index mismatch at " .. idx)
@@ -325,6 +324,17 @@ local function validateAssignmentResult(layout: HallwaySpineV1.SpineLayout, res:
 		seenTypes[rm.prefabName] = true
 		assert(not seenSockets[rm.socket.id], "Duplicate socket: " .. rm.socket.id)
 		seenSockets[rm.socket.id] = true
+
+		local origSock = socketById[rm.socket.id]
+		assert(origSock ~= nil, "Assigned socket not in layout.sockets: " .. rm.socket.id)
+		assert(
+			origSock.roomGx == rm.socket.roomGx
+				and origSock.roomGz == rm.socket.roomGz
+				and origSock.parentKey == rm.socket.parentKey
+				and origSock.roomFacingDir == rm.socket.roomFacingDir
+				and origSock.socketDist == rm.socket.socketDist,
+			"Assigned socket metadata mismatch for " .. rm.socket.id
+		)
 
 		if SPECIAL_SET[rm.prefabName] then
 			specialCount += 1
@@ -338,17 +348,34 @@ local function validateAssignmentResult(layout: HallwaySpineV1.SpineLayout, res:
 		)
 
 		if rm.prefabName == "Room_Mirror" then
+			assert(rm.reserved == true, "Room_Mirror must have reserved == true")
 			assert(rm.socket.alcoveEligible, "Room_Mirror must occupy eligible alcove")
 			mirrorSock = rm.socket
+			reservedIds[rm.socket.id] = true
 		elseif rm.prefabName == "Room_ModelSlot" then
+			assert(rm.reserved == true, "Room_ModelSlot must have reserved == true")
 			assert(rm.socket.alcoveEligible, "Room_ModelSlot must occupy eligible alcove")
 			modelSlotSock = rm.socket
-		elseif rm.prefabName == "Room_Safe" then
-			assert(not rm.reserved, "Room_Safe must not be reserved")
+			reservedIds[rm.socket.id] = true
+		else
+			assert(rm.reserved == false, rm.prefabName .. " must have reserved == false")
+		end
+	end
+
+	-- Derive farthest non-reserved socket independently from layout.sockets
+	local maxNonReservedDist = -1
+	for _, s in layout.sockets do
+		assert(seenSockets[s.id], "Unused topology socket: " .. s.id)
+		if not reservedIds[s.id] and s.socketDist > maxNonReservedDist then
+			maxNonReservedDist = s.socketDist
+		end
+	end
+
+	for idx, rm in res.orderedRooms do
+		if rm.prefabName == "Room_Safe" then
 			local ratio = rm.socket.socketDist / maxDist
 			assert(ratio >= 0.40 - 1e-9 and ratio <= 0.60 + 1e-9, "Room_Safe outside 40-60% window")
 		elseif rm.prefabName == "Room_Exit" then
-			assert(not rm.reserved, "Room_Exit must not be reserved")
 			assert(rm.socket.socketDist == maxNonReservedDist, "Room_Exit not on farthest non-reserved socket")
 		end
 
@@ -455,11 +482,13 @@ function Checkpoint3Test.runAll()
 	Checkpoint3Test.runSeamTests(prefabs, runId)
 
 	local layout = HallwaySpineV1.buildAndValidate()
-	print("Hallway BFS: 12/12")
-	print("Room socket BFS: 10/10")
-	print("Duplicate coordinates: 0")
-	print("Non-reciprocal edges: 0")
-	print("Qualifying chase loops: 1")
+	local st = layout.stats
+	print(HallwaySpineV1.formatReport(layout))
+	assert(st.totalHallwayCells == 12 and st.reachableHallwayCells == 12, "Hallway BFS count mismatch")
+	assert(st.totalRoomSockets == 10 and st.reachableRoomSockets == 10, "Socket BFS count mismatch")
+	assert(st.uniqueOccupiedCoords == 22 and st.duplicateCoords == 0, "Coordinate uniqueness mismatch")
+	assert(st.disconnectedCells == 0 and st.nonReciprocalEdges == 0, "Graph connectivity mismatch")
+	assert(st.qualifyingChaseLoops == 1, "Expected 1 qualifying 3x3 chase loop")
 
 	-- 100 distinct seeds x 3 executions = 300 validated assignments
 	local namedSeeds = { 1, 2, 42, 100, 7419, 12345, 20261126, 99999 }
@@ -503,7 +532,14 @@ function Checkpoint3Test.runAll()
 		local snap2 = snapshotContainer(c2)
 		for name, cf1 in snap1 do
 			local cf2 = snap2[name]
-			assert(cf2 ~= nil and (cf1.Position - cf2.Position).Magnitude <= EPS, "Same-seed mismatch: " .. name)
+			assert(
+				cf2 ~= nil
+					and (cf1.Position - cf2.Position).Magnitude <= EPS
+					and cf1.LookVector:Dot(cf2.LookVector) >= 1 - EPS
+					and cf1.UpVector:Dot(cf2.UpVector) >= 1 - EPS
+					and cf1.RightVector:Dot(cf2.RightVector) >= 1 - EPS,
+				"Same-seed transform mismatch: " .. name
+			)
 		end
 		print("Generation 2: 22 models")
 		print("Same-seed regeneration: PASS")

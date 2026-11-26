@@ -54,7 +54,8 @@ Every milestone gate (`Gate 0`, `4A`, `4B`, `5A`, `5B`, `6A`, `6B`) verifies:
 
 ---
 
-## BunkerGrid Redesign (`feature/bunker-grid-v1`) — Checkpoints 1–3 Runtime Verified
+## BunkerGrid Redesign (`feature/bunker-grid-v1`) — Checkpoints 1–4 Runtime Verified
 - [x] **Checkpoints 1–2:** `Config.luau`, `DoorResolver.luau`, `PrefabLibrary.luau`, `PrefabValidator.luau`, and 15 active `.rbxm` prefabs (`5` hallways + `10` rooms; `Room_Abandoned` consolidated into `Room_Mirror`). Studio-verified: `15/15` prefabs PASS, `15/15` `DoorResolver` masks + `5` invalid inputs + `4` room orientations PASS, `576/576` directed seam cases PASS.
 - [x] **Checkpoint 3:** `HallwaySpineV1.luau` (`12/12` hallways, `10/10` sockets, `1` `3×3` chase loop, `0` duplicate/disconnected/non-reciprocal) and `RoomAssignment.luau` (`Random.new(seed)`, `rooms[1]` standard, `rooms[10]` `Room_Exit`). Studio-verified: `100` distinct seeds × `3` runs (`300` executions, `0` failures, `100` distinct signatures) and `3`-generation round-reset (`22` models, `1` `PlayerSpawn`, owned cleanup) PASS.
-- [ ] **Checkpoints 4–7 (Upcoming):** Physical `PathfindingService` reachability, Stalker chase-loop pathfinding, side-monster scares, and live `RoomGenerator` compatibility adapter.
+- [x] **Checkpoint 4:** `ReachabilityValidator.luau` (bounded async `PathfindingService` using `AGENT_RADIUS = 2.0`, `AGENT_HEIGHT = 7.0`, `AGENT_CAN_JUMP = false`, `NAVMESH_POLL_INTERVAL = 0.25`, `NAVMESH_POLL_TIMEOUT = 5.0`) and `Checkpoint4Test.luau`. Studio-verified: `30/30` room-target paths across seeds `7419`, `12345`, `42` (`0` jump waypoints), `12/12` hallway cells, both sides of `3×3` chase ring navigable, and all negative tests (blocked doorway + recovery, invalid endpoint, timeout, stale generation cancellation, cleanup) PASS.
+- [ ] **Checkpoints 5–7 (Upcoming):** Stalker chase-loop pathfinding (`NPCManager` migration from `AgentRadius=1.6/AgentHeight=5.5` to `2.0/7.0`), side-monster scares, and live `RoomGenerator` compatibility adapter.

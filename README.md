@@ -83,3 +83,55 @@ Detailed specifications, design documentation, and architectural guidelines are 
 - [docs/blackpine-survey-works.md](file:///c:/Users/sanch/Projects/horror-game/docs/blackpine-survey-works.md) – Bunker survey gallery environment art pass & `SurveyMount` handoff.
 - [docs/milestone-3-release.md](file:///c:/Users/sanch/Projects/horror-game/docs/milestone-3-release.md) – Milestone 3 test record & extraction notes.
 - [docs/forest-cabin-handoff.md](file:///c:/Users/sanch/Projects/horror-game/docs/forest-cabin-handoff.md) – Historical environment handoff document for the Blackpine Forest and cabin opening.
+- [docs/LOBBY_TEST_CHECKLIST.md](file:///c:/Users/sanch/Projects/horror-game/docs/LOBBY_TEST_CHECKLIST.md) – Pre-game Dark Forest Lobby QA checklist.
+
+---
+
+## Dark Forest Lobby (`feature/lobby`)
+
+The pre-game hub uses a standalone Rojo project (`lobby.project.json`) with a Dark Forest night aesthetic, a giant animated Frog Merchant stall (Zone A), a central campfire clearing with sit-able logs, and glowing matchmaking play circles (Zone B). Guard checks in `src/server/Lobby/init.server.luau` and `src/client/Lobby/init.client.luau` ensure lobby scripts do not interfere when `default.project.json` runs inside the main road/bunker place (`122077989749573`).
+
+### Running the Lobby Place
+```bash
+rojo serve lobby.project.json
+# Or build a standalone .rbxl file:
+rojo build lobby.project.json -o DarkForestLobby.rbxl
+```
+> Enable **Game Settings -> Security -> Enable Studio Access to API Services** in Roblox Studio when testing `DataStoreService` persistence.
+
+### How to Add Shop Items
+All Character Skins and Weapon Skins are data-driven inside `src/shared/ShopCatalog.luau`. No UI code edits are required.
+1. Open `src/shared/ShopCatalog.luau`.
+2. Append a new `SkinEntry` table inside `characterSkins` or `weaponSkins`:
+   ```luau
+   {
+       id = "char_ranger_alt", -- unique key stored in DataStore
+       category = "Character", -- "Character" or "Weapon"
+       name = "Moss Cloak",
+       rarity = "Rare", -- Common | Uncommon | Rare | Epic | Legendary
+       price = 450, -- Coins (0 = free)
+       description = "Damp wool woven with forest moss.",
+       preview = {
+           primaryColor = Color3.fromRGB(48, 66, 44),
+           secondaryColor = Color3.fromRGB(32, 38, 32),
+           accentColor = Color3.fromRGB(168, 210, 134),
+           style = "cultist", -- ranger | miner | warden | cultist | spectre | antler | torch | blade | cleaver | shard
+       },
+   }
+   ```
+3. The server (`ShopService.luau`) and client `ViewportFrame` shop UI (`ShopGuiController.luau`) automatically load and validate the new entry.
+
+### How to Change Queue Size & Countdown
+All queue settings live at the top of `src/shared/LobbyConfig.luau`:
+- `LobbyConfig.QUEUE_SIZE`: Maximum players per play circle (default `4`).
+- `LobbyConfig.COUNTDOWN_SECONDS`: Launch countdown seconds once triggered (default `5`).
+- `LobbyConfig.AUTO_START_TIMEOUT`: Seconds before 1–3 waiting players launch automatically (`45`; set `0` for strict full-circle `4/4` only).
+- `LobbyConfig.NUM_PADS` / `LobbyConfig.PAD_POSITIONS`: Number and world positions of play circles.
+- `LobbyConfig.FRIENDS_PAD_INDEX`: Which circle requires Roblox friendship with the host (`3`).
+
+### How to Set the Destination Place ID
+Open `src/shared/LobbyConfig.luau` and update line 14:
+```luau
+LobbyConfig.GAME_PLACE_ID = 122077989749573 -- Destination Place ID for Project Horror
+```
+Make sure both the Lobby place and destination place belong to the same Roblox Universe (Experience) so `TeleportService:ReserveServer` and `TeleportAsync` succeed in live servers.

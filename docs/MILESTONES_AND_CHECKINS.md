@@ -54,7 +54,7 @@ Every milestone gate (`Gate 0`, `4A`, `4B`, `5A`, `5B`, `6A`, `6B`) verifies:
 
 ---
 
-## BunkerGrid Redesign (`feature/bunker-grid-v1`) — Checkpoints 1–3 Implemented
-- [x] **Checkpoints 1–2:** `Config.luau`, `DoorResolver.luau`, `PrefabLibrary.luau`, `PrefabValidator.luau`, and 15 active `.rbxm` prefabs (`5` hallways + `10` rooms; `Room_Abandoned` consolidated into `Room_Mirror`).
-- [x] **Checkpoint 3:** `HallwaySpineV1.luau` (12-cell spine, 3×3 chase loop, BFS validation) and `RoomAssignment.luau` (`Random.new(seed)`, alcove/Exit/Safe/standard assignment, `rooms[1]` standard, `rooms[10]` `Room_Exit`).
+## BunkerGrid Redesign (`feature/bunker-grid-v1`) — Checkpoints 1–3 Runtime Verified
+- [x] **Checkpoints 1–2:** `Config.luau`, `DoorResolver.luau`, `PrefabLibrary.luau`, `PrefabValidator.luau`, and 15 active `.rbxm` prefabs (`5` hallways + `10` rooms; `Room_Abandoned` consolidated into `Room_Mirror`). Studio-verified: `15/15` prefabs PASS, `15/15` `DoorResolver` masks + `5` invalid inputs + `4` room orientations PASS, `576/576` directed seam cases PASS.
+- [x] **Checkpoint 3:** `HallwaySpineV1.luau` (`12/12` hallways, `10/10` sockets, `1` `3×3` chase loop, `0` duplicate/disconnected/non-reciprocal) and `RoomAssignment.luau` (`Random.new(seed)`, `rooms[1]` standard, `rooms[10]` `Room_Exit`). Studio-verified: `100` distinct seeds × `3` runs (`300` executions, `0` failures, `100` distinct signatures) and `3`-generation round-reset (`22` models, `1` `PlayerSpawn`, owned cleanup) PASS.
 - [ ] **Checkpoints 4–7 (Upcoming):** Physical `PathfindingService` reachability, Stalker chase-loop pathfinding, side-monster scares, and live `RoomGenerator` compatibility adapter.

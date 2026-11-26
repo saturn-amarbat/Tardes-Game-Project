@@ -163,7 +163,7 @@ function RoomAssignment.assign(layout: HallwaySpineV1.SpineLayout, seed: number)
 
 	table.sort(nonExitEntries, function(a, b)
 		if a.socket.socketDist ~= b.socket.socketDist then
-			return a.socket.socketDist < b.socket.socket.socketDist
+			return a.socket.socketDist < b.socket.socketDist
 		end
 		return a.socket.id < b.socket.id
 	end)

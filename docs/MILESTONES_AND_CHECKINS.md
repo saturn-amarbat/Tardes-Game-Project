@@ -55,6 +55,7 @@ Every milestone gate (`Gate 0`, `4A`, `4B`, `5A`, `5B`, `6A`, `6B`) verifies:
 
 ---
 
-## BunkerGrid Redesign (`integration/lobby-bunker-v1`) — Checkpoints 1–4 Preserved (Inactive)
+## BunkerGrid Redesign (`feature/bunker-stalker-v1`) — Checkpoints 1–4 Verified / Checkpoint 5 Implemented (Awaiting Isolated Studio Run)
 - [x] **Checkpoints 1–4:** Preserved `Config.luau`, `DoorResolver.luau`, `PrefabLibrary.luau`, `PrefabValidator.luau`, `HallwaySpineV1.luau`, `RoomAssignment.luau`, `ReachabilityValidator.luau`, and 15 active `.rbxm` prefabs alongside full Dark Forest Lobby and original gameplay (`RoomGenerator.generate(10)`).
-- [ ] **Checkpoints 5–7 (Upcoming):** Stalker chase-loop pathfinding, side-monster scares, and live `RoomGenerator` compatibility adapter.
+- [ ] **Checkpoint 5 (`StalkerNavigator.luau` & `Checkpoint5Test.luau`):** Implemented on `feature/bunker-stalker-v1` (inactive in live gameplay; `NPCManager.luau` untouched). Physical runtime tests require an isolated local Studio copy containing `ReplicatedStorage/NPCModels/MainNPC_Stalker`.
+- [ ] **Checkpoints 6–7 (Upcoming):** Side-monster scares and live `RoomGenerator` compatibility adapter.

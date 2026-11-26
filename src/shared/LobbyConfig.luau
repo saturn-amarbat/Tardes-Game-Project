@@ -53,9 +53,9 @@ LobbyConfig.SPAWN_POSITION = Vector3.new(0, 0.5, -10)
 LobbyConfig.FROG_POSITION = CFrame.lookAt(Vector3.new(-38, 0, 12), Vector3.new(0, 0, 4))
 LobbyConfig.CAMPFIRE_POSITION = Vector3.new(0, 0, 8)
 LobbyConfig.PAD_POSITIONS = {
-	CFrame.new(34, 0, -16),
-	CFrame.new(46, 0, 0),
-	CFrame.new(34, 0, 16),
+	CFrame.new(32, 0, -20),
+	CFrame.new(44, 0, 0),
+	CFrame.new(32, 0, 20),
 } :: { CFrame }
 
 LobbyConfig.MAP_RADIUS = 85
@@ -66,22 +66,22 @@ LobbyConfig.BOUNDARY_RADIUS = 90
 --------------------------------------------------------------------------------
 LobbyConfig.LIGHTING = {
 	ClockTime = 0.5,
-	Brightness = 0,
-	Ambient = Color3.fromRGB(6, 10, 14),
-	OutdoorAmbient = Color3.fromRGB(4, 8, 12),
-	ExposureCompensation = -0.35,
-	FogColor = Color3.fromRGB(14, 26, 34),
+	Brightness = 0.45,
+	Ambient = Color3.fromRGB(22, 32, 42),
+	OutdoorAmbient = Color3.fromRGB(28, 42, 54),
+	ExposureCompensation = -0.1,
+	FogColor = Color3.fromRGB(24, 46, 56),
 	FogStart = 18,
-	FogEnd = 145,
+	FogEnd = 150,
 }
 
 LobbyConfig.ATMOSPHERE = {
-	Density = 0.44,
+	Density = 0.38,
 	Offset = 0.08,
-	Color = Color3.fromRGB(18, 34, 44),
-	Decay = Color3.fromRGB(10, 18, 26),
+	Color = Color3.fromRGB(36, 64, 78),
+	Decay = Color3.fromRGB(16, 28, 38),
 	Glare = 0.0,
-	Haze = 2.6,
+	Haze = 2.8,
 }
 
 LobbyConfig.BLOOM = {

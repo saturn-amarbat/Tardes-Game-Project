@@ -57,11 +57,11 @@ local noticeCooldown: { [Player]: number } = {}
 local teleportRetries: { [Player]: number } = {}
 local remotesFolder: Folder? = nil
 
-local COLOR_IDLE = Color3.fromRGB(44, 58, 72)
-local COLOR_IDLE_FRIENDS = Color3.fromRGB(54, 88, 138)
-local COLOR_FILLING = Color3.fromRGB(214, 146, 38)
-local COLOR_FULL = Color3.fromRGB(76, 204, 102)
-local COLOR_COUNTDOWN = Color3.fromRGB(218, 68, 52)
+local COLOR_IDLE = Color3.fromRGB(78, 134, 146)
+local COLOR_IDLE_FRIENDS = Color3.fromRGB(72, 136, 224)
+local COLOR_FILLING = Color3.fromRGB(224, 152, 42)
+local COLOR_FULL = Color3.fromRGB(82, 214, 112)
+local COLOR_COUNTDOWN = Color3.fromRGB(226, 74, 58)
 
 local function getRemotes(): Folder
 	if remotesFolder then

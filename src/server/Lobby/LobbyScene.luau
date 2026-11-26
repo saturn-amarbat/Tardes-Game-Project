@@ -406,10 +406,38 @@ local function buildCampfire(parent: Instance)
 	)
 	local fireLight = Instance.new("PointLight")
 	fireLight.Color = Color3.fromRGB(255, 162, 64)
-	fireLight.Range = 28
-	fireLight.Brightness = 1.8
+	fireLight.Range = 36
+	fireLight.Brightness = 2.4
 	fireLight.Shadows = false
 	fireLight.Parent = fireCore
+
+	-- Sparse trail lantern posts guiding between Zone A (Shop) and Zone B (Play Circles)
+	for idx, lPos in { Vector3.new(-18, 0, 10), Vector3.new(20, 0, 2) } do
+		makePart(
+			fireFolder,
+			"TrailPost_" .. tostring(idx),
+			Vector3.new(0.4, 7.5, 0.4),
+			CFrame.new(lPos + Vector3.new(0, 3.75, 0)),
+			DARK_WOOD,
+			Enum.Material.Wood,
+			true
+		)
+		local bulb = makePart(
+			fireFolder,
+			"TrailLantern_" .. tostring(idx),
+			Vector3.new(0.7, 0.9, 0.7),
+			CFrame.new(lPos + Vector3.new(0, 7.2, 0)),
+			LANTERN_GLOW,
+			Enum.Material.Neon,
+			false
+		)
+		local lgt = Instance.new("PointLight")
+		lgt.Color = Color3.fromRGB(255, 180, 92)
+		lgt.Range = 22
+		lgt.Brightness = 0.95
+		lgt.Shadows = false
+		lgt.Parent = bulb
+	end
 
 	-- Low-rate spark emitter (capped for mobile 60fps)
 	local sparks = Instance.new("ParticleEmitter")
@@ -510,12 +538,12 @@ local function buildFrog(parent: Instance): Model
 	frogModel.Name = "FrogShopkeeper"
 	frogModel.Parent = parent
 
-	-- Sculpted seated body (~17 studs tall = ~3.4x player height)
+	-- Squat, broad, unsettling frog (~13 studs tall at brow, ~15 wide) tucked behind counter
 	local body = makePart(
 		frogModel,
 		"Body",
-		Vector3.new(8.5, 9.5, 7.5),
-		cf * CFrame.new(0, 5.2, 0.5) * CFrame.Angles(math.rad(-14), 0, 0),
+		Vector3.new(11, 7.2, 10),
+		cf * CFrame.new(0, 3.8, 0.8) * CFrame.Angles(math.rad(-12), 0, 0),
 		FROG_SKIN,
 		Enum.Material.SmoothPlastic,
 		true
@@ -527,8 +555,8 @@ local function buildFrog(parent: Instance): Model
 	local belly = makePart(
 		frogModel,
 		"Belly",
-		Vector3.new(6.2, 7.2, 3.6),
-		cf * CFrame.new(0, 4.6, -2.5) * CFrame.Angles(math.rad(-14), 0, 0),
+		Vector3.new(7.4, 5.4, 4.2),
+		cf * CFrame.new(0, 3.4, -2.6) * CFrame.Angles(math.rad(-14), 0, 0),
 		FROG_BELLY,
 		Enum.Material.SmoothPlastic,
 		false
@@ -540,8 +568,8 @@ local function buildFrog(parent: Instance): Model
 	local throat = makePart(
 		frogModel,
 		"Throat",
-		Vector3.new(5.2, 2.8, 3.4),
-		cf * CFrame.new(0, 9.2, -2.6),
+		Vector3.new(6.4, 2.8, 4.2),
+		cf * CFrame.new(0, 5.7, -3.4),
 		FROG_BELLY,
 		Enum.Material.SmoothPlastic,
 		false
@@ -549,7 +577,7 @@ local function buildFrog(parent: Instance): Model
 	throat.Shape = Enum.PartType.Ball
 	throat.Reflectance = 0.08
 
-	-- Movable Head subtree (animated & turns toward interacting player)
+	-- Movable Head subtree tucked low into shoulders (animated & turns toward player)
 	local headModel = Instance.new("Model")
 	headModel.Name = "HeadRig"
 	headModel.Parent = frogModel
@@ -557,8 +585,8 @@ local function buildFrog(parent: Instance): Model
 	local head = makePart(
 		headModel,
 		"Head",
-		Vector3.new(9.2, 4.8, 7.2),
-		cf * CFrame.new(0, 12.2, -0.8),
+		Vector3.new(10.6, 4.4, 8.2),
+		cf * CFrame.new(0, 7.9, -1.6),
 		FROG_SKIN,
 		Enum.Material.SmoothPlastic,
 		false
@@ -567,12 +595,24 @@ local function buildFrog(parent: Instance): Model
 	head.Reflectance = 0.09
 	headModel.PrimaryPart = head
 
-	-- Jaw ridge / unsettling wide mouth line
+	local snout = makePart(
+		headModel,
+		"Snout",
+		Vector3.new(8.8, 2.6, 4.8),
+		cf * CFrame.new(0, 7.2, -4.4),
+		FROG_SKIN,
+		Enum.Material.SmoothPlastic,
+		false
+	)
+	snout.Shape = Enum.PartType.Ball
+	snout.Reflectance = 0.09
+
+	-- Wide unsettling mouth slit
 	makePart(
 		headModel,
 		"MouthSlit",
-		Vector3.new(6.8, 0.25, 1.4),
-		cf * CFrame.new(0, 11.1, -3.9),
+		Vector3.new(7.8, 0.28, 1.4),
+		cf * CFrame.new(0, 6.9, -5.8),
 		Color3.fromRGB(16, 18, 16),
 		Enum.Material.SmoothPlastic,
 		false
@@ -582,22 +622,22 @@ local function buildFrog(parent: Instance): Model
 	local tongue = makePart(
 		headModel,
 		"Tongue",
-		Vector3.new(0.7, 0.25, 3.2),
-		cf * CFrame.new(0, 11.1, -2.8),
+		Vector3.new(0.8, 0.26, 3.4),
+		cf * CFrame.new(0, 6.9, -4.2),
 		Color3.fromRGB(148, 68, 76),
 		Enum.Material.SmoothPlastic,
 		false
 	)
 	tongue.Reflectance = 0.12
 
-	-- Wide glossy bulging eyes with horizontal slit pupils + eyelids
-	for idx, side in { -2.8, 2.8 } do
+	-- Wide glossy bulging eyes perched atop the brow with horizontal slit pupils + eyelids
+	for idx, side in { -3.1, 3.1 } do
 		local eyeTag = if idx == 1 then "L" else "R"
 		local eyeBase = makePart(
 			headModel,
 			"EyeOrb_" .. eyeTag,
-			Vector3.new(2.4, 2.4, 2.4),
-			cf * CFrame.new(side, 14.4, -2.2),
+			Vector3.new(2.5, 2.5, 2.5),
+			cf * CFrame.new(side, 9.9, -3.2),
 			FROG_EYE,
 			Enum.Material.SmoothPlastic,
 			false
@@ -608,8 +648,8 @@ local function buildFrog(parent: Instance): Model
 		local pupil = makePart(
 			headModel,
 			"Pupil_" .. eyeTag,
-			Vector3.new(1.4, 0.48, 0.45),
-			cf * CFrame.new(side, 14.4, -3.3),
+			Vector3.new(1.5, 0.5, 0.45),
+			cf * CFrame.new(side, 9.9, -4.3),
 			Color3.fromRGB(8, 8, 6),
 			Enum.Material.SmoothPlastic,
 			false
@@ -620,19 +660,18 @@ local function buildFrog(parent: Instance): Model
 			headModel,
 			"EyeGloss_" .. eyeTag,
 			Vector3.new(0.45, 0.45, 0.25),
-			cf * CFrame.new(side - 0.35, 14.9, -3.35),
+			cf * CFrame.new(side - 0.35, 10.4, -4.35),
 			Color3.fromRGB(255, 255, 240),
 			Enum.Material.Neon,
 			false
 		)
 		gloss.CastShadow = false
 
-		-- Eyelid starts tucked just above eye and slides down during blink
 		local eyelid = makePart(
 			headModel,
 			"Eyelid_" .. eyeTag,
-			Vector3.new(2.55, 0.45, 2.55),
-			cf * CFrame.new(side, 15.5, -2.2),
+			Vector3.new(2.65, 0.48, 2.65),
+			cf * CFrame.new(side, 11.1, -3.2),
 			FROG_DAMP,
 			Enum.Material.SmoothPlastic,
 			false
@@ -642,10 +681,10 @@ local function buildFrog(parent: Instance): Model
 
 	-- Damp skin mottling & warts
 	local warts = {
-		{ Vector3.new(2.6, 7.6, -2.6), Vector3.new(1.4, 1.1, 0.8) },
-		{ Vector3.new(-3.0, 6.2, -2.8), Vector3.new(1.2, 1.0, 0.8) },
-		{ Vector3.new(-2.2, 4.0, -3.2), Vector3.new(1.6, 0.9, 0.7) },
-		{ Vector3.new(3.6, 8.6, 0.2), Vector3.new(1.3, 1.3, 1.3) },
+		{ Vector3.new(3.2, 5.2, -3.4), Vector3.new(1.4, 1.1, 0.9) },
+		{ Vector3.new(-3.6, 4.6, -3.2), Vector3.new(1.3, 1.0, 0.9) },
+		{ Vector3.new(-2.4, 3.0, -3.6), Vector3.new(1.6, 0.9, 0.7) },
+		{ Vector3.new(4.2, 5.6, 0.4), Vector3.new(1.5, 1.4, 1.4) },
 	}
 	for i, w in warts do
 		local spot = makePart(
@@ -661,13 +700,13 @@ local function buildFrog(parent: Instance): Model
 		spot.Reflectance = 0.12
 	end
 
-	-- Sprawled front legs & folded hind legs
-	for _, side in { -4.4, 4.4 } do
+	-- Sprawled front arms & thick folded hind thighs
+	for _, side in { -5.1, 5.1 } do
 		makePart(
 			frogModel,
 			"FrontLeg",
-			Vector3.new(2.2, 2.2, 4.8),
-			cf * CFrame.new(side, 1.1, -3.6),
+			Vector3.new(2.4, 2.4, 5.2),
+			cf * CFrame.new(side, 1.2, -3.6),
 			FROG_SKIN,
 			Enum.Material.SmoothPlastic,
 			true
@@ -676,8 +715,8 @@ local function buildFrog(parent: Instance): Model
 			makePart(
 				frogModel,
 				"Toe",
-				Vector3.new(0.55, 0.35, 1.9),
-				cf * CFrame.new(side + f * 0.75, 0.25, -6.2),
+				Vector3.new(0.58, 0.36, 2.0),
+				cf * CFrame.new(side + f * 0.78, 0.25, -6.2),
 				FROG_DAMP,
 				Enum.Material.SmoothPlastic,
 				false
@@ -686,8 +725,8 @@ local function buildFrog(parent: Instance): Model
 		local backLeg = makePart(
 			frogModel,
 			"BackLeg",
-			Vector3.new(3.4, 3.8, 4.6),
-			cf * CFrame.new(side * 1.15, 2.1, 1.6),
+			Vector3.new(4.2, 4.6, 5.8),
+			cf * CFrame.new(side * 1.18, 2.3, 1.6),
 			FROG_SKIN,
 			Enum.Material.SmoothPlastic,
 			true
@@ -703,8 +742,8 @@ local function buildFrog(parent: Instance): Model
 	local counter = makePart(
 		stall,
 		"Counter",
-		Vector3.new(14, 3.0, 2.4),
-		cf * CFrame.new(0, 1.5, -7.8),
+		Vector3.new(15, 3.0, 2.4),
+		cf * CFrame.new(0, 1.5, -8.2),
 		DARK_WOOD,
 		Enum.Material.Wood,
 		true
@@ -713,13 +752,13 @@ local function buildFrog(parent: Instance): Model
 	makePart(
 		stall,
 		"BackWall",
-		Vector3.new(16, 15, 1),
+		Vector3.new(17, 15, 1),
 		cf * CFrame.new(0, 7.5, 5.5),
 		DARK_WOOD,
 		Enum.Material.Wood,
 		true
 	)
-	for _, side in { -8, 8 } do
+	for _, side in { -8.5, 8.5 } do
 		makePart(
 			stall,
 			"SideWall",
@@ -729,24 +768,33 @@ local function buildFrog(parent: Instance): Model
 			Enum.Material.Wood,
 			true
 		)
+		makePart(
+			stall,
+			"FrontPost",
+			Vector3.new(0.9, 14.5, 0.9),
+			cf * CFrame.new(side * 0.92, 7.25, -7.8),
+			DARK_WOOD,
+			Enum.Material.Wood,
+			true
+		)
 	end
 	makePart(
 		stall,
 		"Roof",
-		Vector3.new(18, 0.6, 15),
-		cf * CFrame.new(0, 16.5, -1.2) * CFrame.Angles(math.rad(-6), 0, 0),
+		Vector3.new(19, 0.6, 15.5),
+		cf * CFrame.new(0, 15.6, -1.2) * CFrame.Angles(math.rad(-6), 0, 0),
 		IRON,
 		Enum.Material.CorrodedMetal,
 		false
 	)
 
-	-- Hanging lanterns (no dynamic shadows for mobile performance)
-	for _, lx in { -5.2, 5.2 } do
+	-- Hanging lanterns mounted outside the frog's face sightline on outer posts
+	for _, lx in { -7.4, 7.4 } do
 		makePart(
 			stall,
 			"LanternCord",
-			Vector3.new(0.12, 2.4, 0.12),
-			cf * CFrame.new(lx, 14.8, -7.2),
+			Vector3.new(0.12, 2.8, 0.12),
+			cf * CFrame.new(lx, 13.4, -8.2),
 			IRON,
 			Enum.Material.Metal,
 			false
@@ -754,16 +802,16 @@ local function buildFrog(parent: Instance): Model
 		local lantern = makePart(
 			stall,
 			"Lantern",
-			Vector3.new(0.85, 1.15, 0.85),
-			cf * CFrame.new(lx, 13.3, -7.2),
+			Vector3.new(0.9, 1.2, 0.9),
+			cf * CFrame.new(lx, 11.7, -8.2),
 			LANTERN_GLOW,
 			Enum.Material.Neon,
 			false
 		)
 		local light = Instance.new("PointLight")
 		light.Color = Color3.fromRGB(255, 186, 92)
-		light.Range = 20
-		light.Brightness = 1.25
+		light.Range = 28
+		light.Brightness = 1.6
 		light.Shadows = false
 		light.Parent = lantern
 	end
@@ -774,7 +822,7 @@ local function buildFrog(parent: Instance): Model
 			stall,
 			"Jar_" .. tostring(i),
 			Vector3.new(0.75, 1.15, 0.75),
-			cf * CFrame.new(-4.8 + i * 2.1, 3.58, -7.8),
+			cf * CFrame.new(-5.2 + i * 2.1, 3.58, -8.2),
 			Color3.fromRGB(96, 124, 90),
 			Enum.Material.Glass,
 			false
@@ -847,15 +895,16 @@ local function buildMushroomsAndFireflies(parent: Instance)
 			local cap = makePart(
 				clusterFolder,
 				"Cap",
-				Vector3.new(capR * 2, capR, capR * 2),
-				CFrame.new(pos + offset + Vector3.new(0, stemH + capR * 0.3, 0)),
-				MUSHROOM_CAP,
+				Vector3.new(capR * 2.2, capR * 0.9, capR * 2.2),
+				CFrame.new(pos + offset + Vector3.new(0, stemH + capR * 0.2, 0)),
+				Color3.fromRGB(72, 168, 128),
 				Enum.Material.Neon,
 				false
 			)
+			cap.Shape = Enum.PartType.Ball
 			if m == 1 and i % 2 == 1 then
 				local glow = Instance.new("PointLight")
-				glow.Color = MUSHROOM_CAP
+				glow.Color = Color3.fromRGB(72, 168, 128)
 				glow.Range = 9
 				glow.Brightness = 0.42
 				glow.Shadows = false

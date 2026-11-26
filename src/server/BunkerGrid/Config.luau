@@ -17,15 +17,24 @@ local Config = table.freeze({
 	DOOR_H = 9,
 	HALL_W = 16,
 
+	ROOM_COUNT = 10,
+
 	-- Stalker (MainNPC_Stalker: 2.81 W x 6.39 H x 1.57 D) Pathfinding parameters
 	AGENT_RADIUS = 2.0,
 	AGENT_HEIGHT = 7.0,
 	AGENT_CAN_JUMP = false,
 	AGENT_WAYPOINT_SPACING = 4,
+	REPATH_INTERVAL = 0.35,
 
 	-- Reachability poll confirmation parameters
 	NAVMESH_POLL_INTERVAL = 0.25,
 	NAVMESH_POLL_TIMEOUT = 5.0,
+
+	-- Topology & chase loop constraints
+	MIN_RESERVED_ALCOVES = 2,
+	MIN_CHASE_LOOPS = 1,
+	MAX_CHASE_LOOPS = 2,
+	MIN_CHASE_LOOP_SIZE = 3,
 })
 
 return Config

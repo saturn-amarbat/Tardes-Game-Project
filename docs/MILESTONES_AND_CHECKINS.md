@@ -51,3 +51,10 @@ Every milestone gate (`Gate 0`, `4A`, `4B`, `5A`, `5B`, `6A`, `6B`) verifies:
 - **Remaining:**
   - [ ] **Check-In 6A:** Profile Blackpine Forest (290 pines), `SurveyGallery`, and `StreamingEnabled` (`Atomic`) on real low-end mobile devices and verify touch prompt/button ergonomics.
   - [ ] **Check-In 6B:** Verify live Creator Dashboard funnel data, complete final regression pass, and tag v1 release candidate.
+
+---
+
+## BunkerGrid Redesign (`feature/bunker-grid-v1`) — Checkpoints 1–3 Implemented
+- [x] **Checkpoints 1–2:** `Config.luau`, `DoorResolver.luau`, `PrefabLibrary.luau`, `PrefabValidator.luau`, and 15 active `.rbxm` prefabs (`5` hallways + `10` rooms; `Room_Abandoned` consolidated into `Room_Mirror`).
+- [x] **Checkpoint 3:** `HallwaySpineV1.luau` (12-cell spine, 3×3 chase loop, BFS validation) and `RoomAssignment.luau` (`Random.new(seed)`, alcove/Exit/Safe/standard assignment, `rooms[1]` standard, `rooms[10]` `Room_Exit`).
+- [ ] **Checkpoints 4–7 (Upcoming):** Physical `PathfindingService` reachability, Stalker chase-loop pathfinding, side-monster scares, and live `RoomGenerator` compatibility adapter.

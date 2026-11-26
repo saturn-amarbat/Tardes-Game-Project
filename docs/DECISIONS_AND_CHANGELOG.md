@@ -58,6 +58,13 @@ Current verified baseline: **`main` at `24f25b3`** (+ Studio Atmosphere, Lobby &
   3. Clean sky-floating/duplicate pass-1 lobby props from Studio `Opening`, fix inverted `SurfaceGui.Face` directions, disable dynamic campfire shadows, replace `TextScaled` with crisp fixed `TextSize`, and serialize `HauntDressing` + `LobbyDressing` into [src/server/ForestCabin/Opening.rbxmx](file:///c:/Users/sanch/Projects/horror-game/src/server/ForestCabin/Opening.rbxmx).
 - **Why:** Reconciles Studio Team Create `v56`–`v58` atmosphere and lobby dressing cleanly back into Rojo/Git without script drift while fixing critical orientation, `PlayerGui` startup race, shadow-budget flicker, and forest groan leakage bugs.
 
+### ADR-11: Grid-Snapped Modular Bunker Foundation & Checkpoint 3 (`BunkerGrid`)
+- **Decision:**
+  1. Centralize grid constants in `src/server/BunkerGrid/Config.luau` (`CELL = 32`, `WALL_H = 12`, `WALL_T = 1`, `DOOR_W = 8`, `DOOR_H = 9`, `HALL_W = 16`, `ROOM_COUNT = 10`, Stalker `AGENT_RADIUS = 2.0`, `AGENT_HEIGHT = 7.0`, `REPATH_INTERVAL = 0.35`, `MIN_RESERVED_ALCOVES = 2`, `MIN/MAX_CHASE_LOOPS = 1..2`, `MIN_CHASE_LOOP_SIZE = 3`). Legacy `BunkerHallways/Config.luau` remains untouched as a temporary migration boundary.
+  2. Standardize 15 active `.rbxm` prefabs (`5` hallways + `10` rooms; `Room_Abandoned` consolidated into `Room_Mirror`) in `assets/BunkerPrefabs/` mapped to `ServerStorage/BunkerPrefabs`.
+  3. Implement `HallwaySpineV1.luau` (12-cell deterministic spine with a `3×3` chase loop and BFS structural validation) and `RoomAssignment.luau` (`Random.new(seed)`, `rooms[1]` standard, `rooms[10]` `Room_Exit`).
+- **Why:** Replaces variable-size `RoomTemplates` with uniform `32×32` `Atomic` grid cells sized for `MainNPC_Stalker` while keeping live `RoomGenerator` unchanged until Checkpoint 7.
+
 ---
 
 ## Chronological Implementation History

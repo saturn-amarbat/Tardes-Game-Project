@@ -67,6 +67,11 @@ To prevent data loss, conflicts, and sync desynchronization:
   - **Technical Lead**: Owns `src/` (Luau codebase) via Rojo + Git, enforcing `--!strict`, modular services/controllers, and CI checks (`stylua`, `selene`).
   - **Creative Lead**: Owns 3D geometry, environment art, [src/server/ForestCabin/Opening.rbxmx](file:///c:/Users/sanch/Projects/horror-game/src/server/ForestCabin/Opening.rbxmx), `ReplicatedStorage/RoomTemplates`, `ReplicatedStorage/NPCModels`, `Lighting`, audio instances, and raw UI layout in Team Create.
 
+### Modular Grid Bunker (`src/server/BunkerGrid/`, Checkpoints 1–3)
+- **Active Roster (`15` modular prefabs):** `5` hallways (`HallDeadEnd`, `HallCorner`, `HallStraight`, `HallT`, `HallCross`) + `10` single-door rooms (`4` special: `Room_Mirror`, `Room_ModelSlot`, `Room_Safe`, `Room_Exit`; `6` standard: `Room_Storage`, `Room_Fuse`, `Room_Flooded`, `Room_Study`, `Room_Generator`, `Room_Archive`). `Room_Abandoned` was consolidated into `Room_Mirror`.
+- **Single Source of Truth (`src/server/BunkerGrid/Config.luau`):** Locks `CELL = 32`, `WALL_H = 12`, `WALL_T = 1`, `DOOR_W = 8`, `DOOR_H = 9`, `HALL_W = 16`, `ROOM_COUNT = 10`, Stalker Pathfinding (`AGENT_RADIUS = 2.0`, `AGENT_HEIGHT = 7.0`, `AGENT_CAN_JUMP = false`, `REPATH_INTERVAL = 0.35`), and chase-loop constraints (`1–2` loops, `3×3` minimum).
+- **Checkpoint 3 (`HallwaySpineV1.luau` & `RoomAssignment.luau`):** Deterministic 12-cell hallway spine with a `3×3` chase loop, BFS structural validation, and `Random.new(seed)` room assignment (`rooms[1]` standard, `rooms[10]` `Room_Exit`). *(Not yet wired into live `RoomGenerator`; Checkpoints 4–7 remain upcoming.)*
+
 ---
 
 ## Documentation Index

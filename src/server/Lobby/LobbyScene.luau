@@ -1199,6 +1199,7 @@ end
 local function buildSpawn(parent: Instance)
 	local spawn = Instance.new("SpawnLocation")
 	spawn.Name = "LobbySpawn"
+	spawn.Enabled = true
 	spawn.Size = Vector3.new(8, 1, 8)
 	spawn.CFrame = CFrame.new(LobbyConfig.SPAWN_POSITION)
 	spawn.Color = DIRT

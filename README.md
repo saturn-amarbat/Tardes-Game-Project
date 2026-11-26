@@ -89,12 +89,13 @@ Detailed specifications, design documentation, and architectural guidelines are 
 
 ## Dark Forest Lobby (`feature/lobby`)
 
-The pre-game hub uses a standalone Rojo project (`lobby.project.json`) with a Dark Forest night aesthetic, a giant animated Frog Merchant stall (Zone A), a central campfire clearing with sit-able logs, and glowing matchmaking play circles (Zone B). Guard checks in `src/server/Lobby/init.server.luau` and `src/client/Lobby/init.client.luau` ensure lobby scripts do not interfere when `default.project.json` runs inside the main road/bunker place (`122077989749573`).
+The pre-game hub uses a Dark Forest night aesthetic with a giant animated Frog Merchant stall (Zone A), a central campfire clearing with sit-able logs, and four matchmaking play circles (Zone B: **1 PLAYER**, **2 PLAYERS**, **3 PLAYERS**, **4 PLAYERS**). Players spawn in the Dark Forest Lobby first (`LobbyConfig.shouldStartInLobby()`); stepping into a circle triggers a launch countdown that teleports the party to a private reserved server via `TeleportService:ReserveServer` (live Roblox) or smoothly fades & transitions into the actual game inside Roblox Studio playtests (`PLAYTEST_IN_PLACE_IN_STUDIO = true`).
 
 ### Running the Lobby Place
 ```bash
+rojo serve default.project.json
+# Or serve/build the standalone Lobby place:
 rojo serve lobby.project.json
-# Or build a standalone .rbxl file:
 rojo build lobby.project.json -o DarkForestLobby.rbxl
 ```
 > Enable **Game Settings -> Security -> Enable Studio Access to API Services** in Roblox Studio when testing `DataStoreService` persistence.
@@ -123,15 +124,15 @@ All Character Skins and Weapon Skins are data-driven inside `src/shared/ShopCata
 
 ### How to Change Queue Size & Countdown
 All queue settings live at the top of `src/shared/LobbyConfig.luau`:
-- `LobbyConfig.QUEUE_SIZE`: Maximum players per play circle (default `4`).
+- `LobbyConfig.PADS`: Configures each play circle's position, max player count (`1`, `2`, `3`, `4`), title (`"1 PLAYER"`..`"4 PLAYERS"`), and optional `friendsOnly` flag.
 - `LobbyConfig.COUNTDOWN_SECONDS`: Launch countdown seconds once triggered (default `5`).
-- `LobbyConfig.AUTO_START_TIMEOUT`: Seconds before 1–3 waiting players launch automatically (`45`; set `0` for strict full-circle `4/4` only).
-- `LobbyConfig.NUM_PADS` / `LobbyConfig.PAD_POSITIONS`: Number and world positions of play circles.
-- `LobbyConfig.FRIENDS_PAD_INDEX`: Which circle requires Roblox friendship with the host (`3`).
+- `LobbyConfig.AUTO_START_TIMEOUT`: Seconds before partially filled multi-player circles launch automatically (`45`; set `0` for strict full-circle only).
+- `LobbyConfig.FRIENDS_PAD_INDEX`: Optional pad index (`1..4`) locked to the host's Roblox friends (`0` = none locked by default).
+- `LobbyConfig.PLAYTEST_IN_PLACE_IN_STUDIO`: Set `true` (default) to transition cleanly into the main game during Studio Playtest; set `false` to test `TeleportService` failure handling.
 
 ### How to Set the Destination Place ID
-Open `src/shared/LobbyConfig.luau` and update line 14:
+Open `src/shared/LobbyConfig.luau` and update `GAME_PLACE_ID`:
 ```luau
 LobbyConfig.GAME_PLACE_ID = 122077989749573 -- Destination Place ID for Project Horror
 ```
-Make sure both the Lobby place and destination place belong to the same Roblox Universe (Experience) so `TeleportService:ReserveServer` and `TeleportAsync` succeed in live servers.
+Make sure both the Lobby place and destination place belong to the same Roblox Universe (Experience) so `TeleportService:ReserveServer` and `TeleportAsync` succeed in live servers. When `Project Horror` runs as a combined place with `Workspace.LobbyMap`, public joins (`PrivateServerId == ""`) start in the Lobby, and reserved servers launched from a play circle (`PrivateServerId ~= ""`) start directly in the actual game.

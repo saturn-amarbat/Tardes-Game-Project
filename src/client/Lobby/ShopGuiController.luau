@@ -37,6 +37,8 @@ local coinLabel: TextLabel? = nil
 local dataWarningBanner: TextLabel? = nil
 local previewSpinners: { { model: Model, baseCF: CFrame } } = {}
 local firstTabButton: TextButton? = nil
+local renderConn: RBXScriptConnection? = nil
+local inputConn: RBXScriptConnection? = nil
 
 local BG_COLOR = Color3.fromRGB(14, 17, 16)
 local HEADER_BG = Color3.fromRGB(20, 24, 22)
@@ -911,7 +913,7 @@ function ShopGuiController.init()
 
 	-- Gentle turntable rotation for ViewportFrame skin models while shop is open
 	local spinAngle = 0
-	RunService.RenderStepped:Connect(function(dt: number)
+	renderConn = RunService.RenderStepped:Connect(function(dt: number)
 		if not shopGui or not shopGui.Enabled then
 			return
 		end
@@ -924,7 +926,7 @@ function ShopGuiController.init()
 	end)
 
 	-- Gamepad B / Escape closes popup or shop
-	UserInputService.InputBegan:Connect(function(input: InputObject, gameProcessed: boolean)
+	inputConn = UserInputService.InputBegan:Connect(function(input: InputObject, gameProcessed: boolean)
 		if not shopGui or not shopGui.Enabled then
 			return
 		end
@@ -1010,6 +1012,23 @@ function ShopGuiController.toggle()
 	else
 		ShopGuiController.open()
 	end
+end
+
+function ShopGuiController.destroy()
+	ShopGuiController.close()
+	if renderConn then
+		renderConn:Disconnect()
+		renderConn = nil
+	end
+	if inputConn then
+		inputConn:Disconnect()
+		inputConn = nil
+	end
+	if shopGui then
+		shopGui:Destroy()
+		shopGui = nil
+	end
+	mainFrame = nil
 end
 
 return ShopGuiController

@@ -2,26 +2,29 @@
 --[[
   Lobby Client Bootstrap  –  initializes all Dark Forest Lobby client systems.
 
-  Guard ensures that if default.project.json syncs this folder into the main
-  road/bunker place, it exits cleanly without displaying Lobby HUD or ambience.
+  Runs whenever the server starts in the Dark Forest Lobby first.
+  Listens for LobbyRemotes.EnterGame to transition smoothly into the game
+  when a Play Circle launches inside Studio Playtest.
 ]]
 
+local Lighting = game:GetService("Lighting")
 local Players = game:GetService("Players")
 local ProximityPromptService = game:GetService("ProximityPromptService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local SocialService = game:GetService("SocialService")
-local Workspace = game:GetService("Workspace")
+local TweenService = game:GetService("TweenService")
 
 local LobbyConfig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("LobbyConfig"))
 
-if
-	(game.PlaceId > 0 and game.PlaceId == LobbyConfig.GAME_PLACE_ID)
-	or script.Parent:FindFirstChild("PrologueController") ~= nil
-then
-	if Workspace:GetAttribute("ForceLobbyScene") ~= true then
-		return
-	end
+local player = Players.LocalPlayer
+if not LobbyConfig.shouldStartInLobby() or player:GetAttribute("InGame") == true then
+	return
 end
+
+if player:GetAttribute("LobbyClientBooted") == true then
+	return
+end
+player:SetAttribute("LobbyClientBooted", true)
 
 local remotes = ReplicatedStorage:WaitForChild("LobbyRemotes", 10)
 if not remotes then
@@ -34,7 +37,6 @@ local QueueHudController = require(script.QueueHudController)
 local LobbyAmbience = require(script.LobbyAmbience)
 local LobbyFrogController = require(script.LobbyFrogController)
 
-local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui") :: PlayerGui
 
 ShopGuiController.init()
@@ -43,12 +45,14 @@ LobbyAmbience.init()
 LobbyFrogController.init()
 
 -- Frog ProximityPrompt opens ShopGui, turns head, and plays a greeting line
-ProximityPromptService.PromptTriggered:Connect(function(prompt: ProximityPrompt, triggerPlayer: Player)
-	if triggerPlayer == player and prompt.Name == "BrowseShopPrompt" then
-		LobbyFrogController.greetPlayer()
-		ShopGuiController.open()
+local promptConn = ProximityPromptService.PromptTriggered:Connect(
+	function(prompt: ProximityPrompt, triggerPlayer: Player)
+		if triggerPlayer == player and prompt.Name == "BrowseShopPrompt" then
+			LobbyFrogController.greetPlayer()
+			ShopGuiController.open()
+		end
 	end
-end)
+)
 
 -- Persistent HUD: always-visible coin pill + bottom bar (Invite Friends, Shop, Emotes)
 local function buildPersistentHud()
@@ -192,4 +196,70 @@ local function buildPersistentHud()
 end
 
 buildPersistentHud()
+
+local enterGameEv = remotes:WaitForChild("EnterGame", 10)
+if enterGameEv and enterGameEv:IsA("RemoteEvent") then
+	local transitioning = false
+	enterGameEv.OnClientEvent:Connect(function()
+		if transitioning then
+			return
+		end
+		transitioning = true
+		promptConn:Disconnect()
+
+		-- Smooth black transition curtain into the actual game
+		local veilGui = Instance.new("ScreenGui")
+		veilGui.Name = "LobbyEnterGameFade"
+		veilGui.IgnoreGuiInset = true
+		veilGui.ResetOnSpawn = false
+		veilGui.DisplayOrder = 200
+		veilGui.Parent = playerGui
+
+		local veil = Instance.new("Frame")
+		veil.Size = UDim2.fromScale(1, 1)
+		veil.BackgroundColor3 = Color3.new(0, 0, 0)
+		veil.BackgroundTransparency = 1
+		veil.BorderSizePixel = 0
+		veil.Parent = veilGui
+
+		local statusTxt = Instance.new("TextLabel")
+		statusTxt.AnchorPoint = Vector2.new(0.5, 0.5)
+		statusTxt.Position = UDim2.fromScale(0.5, 0.5)
+		statusTxt.Size = UDim2.new(0.8, 0, 0, 48)
+		statusTxt.BackgroundTransparency = 1
+		statusTxt.Text = "Entering Blackpine Woods..."
+		statusTxt.Font = Typography.Fonts.Narrative
+		statusTxt.TextSize = 24
+		statusTxt.TextColor3 = Typography.Colors.ParchmentGold
+		statusTxt.TextTransparency = 1
+		statusTxt.Parent = veil
+
+		TweenService:Create(veil, TweenInfo.new(0.45), { BackgroundTransparency = 0 }):Play()
+		TweenService:Create(statusTxt, TweenInfo.new(0.45), { TextTransparency = 0 }):Play()
+		task.wait(0.5)
+
+		ShopGuiController.destroy()
+		QueueHudController.destroy()
+		LobbyAmbience.stop()
+		LobbyFrogController.stop()
+		local lobbyHud = playerGui:FindFirstChild("LobbyHUD")
+		if lobbyHud then
+			lobbyHud:Destroy()
+		end
+		Lighting.FogEnd = 100000
+
+		local waitStart = os.clock()
+		while player:GetAttribute("GameTeleportComplete") ~= true and os.clock() - waitStart < 3.0 do
+			task.wait(0.05)
+		end
+		task.wait(0.25)
+
+		TweenService:Create(statusTxt, TweenInfo.new(0.5), { TextTransparency = 1 }):Play()
+		local fadeOut = TweenService:Create(veil, TweenInfo.new(0.7), { BackgroundTransparency = 1 })
+		fadeOut:Play()
+		fadeOut.Completed:Wait()
+		veilGui:Destroy()
+	end)
+end
+
 print("[LobbyClient] Dark Forest Lobby client initialized.")

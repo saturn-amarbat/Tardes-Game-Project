@@ -19,6 +19,8 @@ local LobbyFrogController = {}
 
 local player = Players.LocalPlayer
 local greetingLabel: TextLabel? = nil
+local greetingGui: ScreenGui? = nil
+local renderConn: RBXScriptConnection? = nil
 local greetingToken = 0
 local forceLookUntil = 0
 
@@ -50,7 +52,20 @@ local function buildGreetingUI(): TextLabel
 	label.TextTransparency = 1
 	label.Parent = gui
 
+	greetingGui = gui
 	return label
+end
+
+function LobbyFrogController.stop()
+	if renderConn then
+		renderConn:Disconnect()
+		renderConn = nil
+	end
+	if greetingGui then
+		greetingGui:Destroy()
+		greetingGui = nil
+	end
+	greetingLabel = nil
 end
 
 function LobbyFrogController.greetPlayer()
@@ -135,7 +150,7 @@ function LobbyFrogController.init()
 
 		local currentYaw = 0
 
-		RunService.RenderStepped:Connect(function(dt: number)
+		renderConn = RunService.RenderStepped:Connect(function(dt: number)
 			if not frog.Parent then
 				return
 			end

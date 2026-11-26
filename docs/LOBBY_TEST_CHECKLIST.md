@@ -24,16 +24,18 @@ Enable **Game Settings -> Security -> Enable Studio Access to API Services** bef
 
 ## 3. Two Players Joining & Leaving a Play Circle
 - [ ] Start a 2-player Studio test server (`Test -> Local Server -> 2 Players`).
-- [ ] Player 1 steps onto `Play Circle #1`:
-  - Pad glow turns **Amber**, `PadBillboard` updates for all players to `1/4 • AUTO-START 45s` with Player 1's name, and Player 1's `QueueHud` displays their headshot.
-- [ ] Player 2 steps onto `Play Circle #1`:
-  - `PadBillboard` updates for both clients to `2/4 • AUTO-START ...` listing both names, and `QueueHud` shows both headshots.
-- [ ] Player 2 steps off `Play Circle #1`:
-  - Count decreases back to `1/4`, Player 2's name and headshot vanish immediately, and Player 2's `QueueHud` hides.
-- [ ] Player 1 walks directly onto `Play Circle #2` while another circle exists:
-  - Verify Player 1 is removed from Circle #1 (`0/4`, dim glow) and added only to Circle #2 (never in two circles simultaneously).
-- [ ] **Friends Circle (`Play Circle #3`)**:
-  - Non-friend player steps in after host -> verify rejection notice `"Friends-only circle — must be Roblox friends with <Host>."` and count stays `1/4`.
+- [ ] Player 1 steps onto `Play Circle #1 (1 PLAYER)`:
+  - Pad turns green/red (`1/1`), countdown `LAUNCHING IN 5...` starts immediately, and in Studio Playtest transitions smoothly into Blackpine Woods (`InGame = true`).
+- [ ] On `Play Circle #2 (2 PLAYERS)` or `Play Circle #4 (4 PLAYERS)`:
+  - Player 1 steps on -> pad turns **Amber**, `PadBillboard` updates to `1/2` (`1/4`) with `AUTO-START 45s`, and `QueueHud` displays their headshot.
+- [ ] Player 2 steps onto the same circle:
+  - `PadBillboard` updates for both clients listing both names, and `QueueHud` shows both headshots.
+- [ ] Player 2 steps off:
+  - Count decreases, Player 2's name and headshot vanish immediately, and Player 2's `QueueHud` hides.
+- [ ] Player 1 walks directly onto `Play Circle #3 (3 PLAYERS)`:
+  - Verify Player 1 is removed from the previous circle and added only to Circle #3 (never in two circles simultaneously).
+- [ ] **Optional Friends Circle (`FRIENDS_PAD_INDEX > 0` or `friendsOnly = true`):**
+  - Non-friend player steps in after host -> verify rejection notice `"Friends-only circle — must be Roblox friends with <Host>."`.
 
 ## 4. 4/4 Teleport & Reserved Server Handoff
 - [ ] Start a 4-player test (or temporarily set `LobbyConfig.QUEUE_SIZE = 2` for a 2-player live test in a published Experience).
@@ -52,6 +54,6 @@ Enable **Game Settings -> Security -> Enable Studio Access to API Services** bef
 - [ ] Verify the countdown **immediately cancels**, remaining players receive the notice `"<Name> left the circle — countdown cancelled."`, pad glow reverts to **Amber**, count decrements accurately (`3/4`), and no partial teleport fires prematurely.
 
 ## 6. Teleport Failure Handling & Retry
-- [ ] Test in Studio Play mode (where cross-place teleport fails) or temporarily point `LobbyConfig.GAME_PLACE_ID` to an invalid/unpublished Place ID.
+- [ ] Temporarily set `LobbyConfig.PLAYTEST_IN_PLACE_IN_STUDIO = false` (or point `LobbyConfig.GAME_PLACE_ID` to an invalid/unpublished Place ID) and launch in Studio Play mode.
 - [ ] Trigger a launch (`4/4` or wait out `AUTO_START_TIMEOUT`).
 - [ ] Verify server logs the warning, fires `"Teleport failed — retrying (1/2)..."` / `(2/2)` notices via `QueueNotice`, retries up to `LobbyConfig.MAX_TELEPORT_RETRIES` times, and on final failure displays a clear red UI notice (`"Teleport failed: ... Step back in to retry."`) and resets the pad cleanly without soft-locking any player.

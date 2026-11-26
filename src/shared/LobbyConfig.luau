@@ -7,7 +7,17 @@
   other modules.
 ]]
 
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+
 local LobbyConfig = {}
+
+export type PadConfig = {
+	cf: CFrame,
+	maxPlayers: number,
+	title: string,
+	friendsOnly: boolean,
+}
 
 --------------------------------------------------------------------------------
 -- Teleport & Destination
@@ -16,17 +26,44 @@ local LobbyConfig = {}
 LobbyConfig.GAME_PLACE_ID = 122077989749573
 LobbyConfig.MAX_TELEPORT_RETRIES = 2
 LobbyConfig.TELEPORT_RETRY_DELAY = 2.0
+-- When testing in Roblox Studio, QueueService transitions launched players
+-- smoothly into the actual game within the same server (Studio blocks TeleportService).
+LobbyConfig.PLAYTEST_IN_PLACE_IN_STUDIO = true
+
+--- Returns true when this server should boot players into the Dark Forest Lobby first.
+function LobbyConfig.shouldStartInLobby(): boolean
+	-- Live reserved servers launched from a play circle start directly in the game.
+	if game.PrivateServerId ~= "" then
+		return false
+	end
+	local override = Workspace:GetAttribute("ForceLobbyScene")
+	if typeof(override) == "boolean" then
+		return override
+	end
+	if Workspace:FindFirstChild("LobbyMap") ~= nil then
+		return true
+	end
+	return game.PlaceId ~= LobbyConfig.GAME_PLACE_ID or RunService:IsStudio()
+end
 
 --------------------------------------------------------------------------------
--- Queue Pads (Play Circles)
+-- Queue Pads (Play Circles: 1P, 2P, 3P, 4P)
 --------------------------------------------------------------------------------
-LobbyConfig.QUEUE_SIZE = 4 -- Max players per circle
+LobbyConfig.QUEUE_SIZE = 4 -- Default/max squad capacity
 LobbyConfig.COUNTDOWN_SECONDS = 5 -- Launch countdown once ready
--- Seconds before 1..(QUEUE_SIZE-1) players auto-launch (set 0 for strict full-circle only)
+-- Seconds before partially filled multi-player circles auto-launch (0 = strict full circle)
 LobbyConfig.AUTO_START_TIMEOUT = 45
-LobbyConfig.NUM_PADS = 3 -- Number of play circles in Zone B
-LobbyConfig.FRIENDS_PAD_INDEX = 3 -- Pad index designated as "Friends Only"
-LobbyConfig.PAD_RADIUS = 7 -- Studs from pad center to count as standing inside
+LobbyConfig.FRIENDS_PAD_INDEX = 0 -- Optional index (1..4) if you want one circle locked to friends
+LobbyConfig.PAD_RADIUS = 6.5 -- Studs from pad center to count as standing inside
+
+LobbyConfig.PADS = {
+	{ cf = CFrame.new(28, 0, -26), maxPlayers = 1, title = "1 PLAYER", friendsOnly = false },
+	{ cf = CFrame.new(44, 0, -10), maxPlayers = 2, title = "2 PLAYERS", friendsOnly = false },
+	{ cf = CFrame.new(44, 0, 10), maxPlayers = 3, title = "3 PLAYERS", friendsOnly = false },
+	{ cf = CFrame.new(28, 0, 26), maxPlayers = 4, title = "4 PLAYERS", friendsOnly = false },
+} :: { PadConfig }
+
+LobbyConfig.NUM_PADS = #LobbyConfig.PADS
 
 --------------------------------------------------------------------------------
 -- Shop & Economy
@@ -53,9 +90,10 @@ LobbyConfig.SPAWN_POSITION = Vector3.new(0, 0.5, -10)
 LobbyConfig.FROG_POSITION = CFrame.lookAt(Vector3.new(-38, 0, 12), Vector3.new(0, 0, 4))
 LobbyConfig.CAMPFIRE_POSITION = Vector3.new(0, 0, 8)
 LobbyConfig.PAD_POSITIONS = {
-	CFrame.new(32, 0, -20),
-	CFrame.new(44, 0, 0),
-	CFrame.new(32, 0, 20),
+	CFrame.new(28, 0, -26),
+	CFrame.new(44, 0, -10),
+	CFrame.new(44, 0, 10),
+	CFrame.new(28, 0, 26),
 } :: { CFrame }
 
 LobbyConfig.MAP_RADIUS = 85

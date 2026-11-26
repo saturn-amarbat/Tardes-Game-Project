@@ -23,6 +23,8 @@ export type QueuedMember = {
 
 export type PadPayload = {
 	index: number,
+	maxPlayers: number?,
+	title: string?,
 	players: { QueuedMember },
 	countdown: number?,
 	autoStartRemaining: number?,
@@ -31,6 +33,7 @@ export type PadPayload = {
 	hostUserId: number?,
 }
 
+local hudGui: ScreenGui? = nil
 local statusFrame: Frame? = nil
 local statusLabel: TextLabel? = nil
 local countdownLabel: TextLabel? = nil
@@ -230,8 +233,21 @@ local function updateAvatars(members: { QueuedMember })
 	end
 end
 
+function QueueHudController.destroy()
+	if hudGui then
+		hudGui:Destroy()
+		hudGui = nil
+	end
+	statusFrame = nil
+	statusLabel = nil
+	countdownLabel = nil
+	avatarsRow = nil
+	friendHintLabel = nil
+	noticeLabel = nil
+end
+
 function QueueHudController.init()
-	buildHud()
+	hudGui = buildHud()
 
 	local remotes = ReplicatedStorage:WaitForChild("LobbyRemotes", 10)
 	if not remotes then
@@ -272,11 +288,11 @@ function QueueHudController.init()
 
 			if myPad then
 				statusFrame.Visible = true
-				local padLabel = if myPad.friendsOnly
-					then "Friends Circle"
-					else "Play Circle #" .. tostring(myPad.index)
+				local maxCount = myPad.maxPlayers or LobbyConfig.QUEUE_SIZE
+				local padLabel = myPad.title
+					or (if myPad.friendsOnly then "Friends Circle" else "Play Circle #" .. tostring(myPad.index))
 				if statusLabel then
-					statusLabel.Text = string.format("%s — %d/%d", padLabel, #myPad.players, LobbyConfig.QUEUE_SIZE)
+					statusLabel.Text = string.format("%s — %d/%d", padLabel, #myPad.players, maxCount)
 				end
 				if countdownLabel then
 					if myPad.launching then

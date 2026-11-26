@@ -24,6 +24,7 @@
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 local TeleportService = game:GetService("TeleportService")
 local Workspace = game:GetService("Workspace")
 
@@ -35,6 +36,8 @@ local QueueService = {}
 export type PadState = {
 	index: number,
 	cf: CFrame,
+	maxPlayers: number,
+	title: string,
 	players: { Player },
 	hostUserId: number?,
 	countdown: number?,
@@ -127,9 +130,14 @@ end
 local function updatePadVisuals(pad: PadState)
 	local billboard = pad.billboard
 	local count = #pad.players
-	local maxCount = LobbyConfig.QUEUE_SIZE
+	local maxCount = pad.maxPlayers
 
 	if billboard then
+		local titleLabel = billboard:FindFirstChild("TitleLabel")
+		if titleLabel and titleLabel:IsA("TextLabel") then
+			titleLabel.Text = pad.title
+		end
+
 		local countLabel = billboard:FindFirstChild("CountLabel")
 		local namesLabel = billboard:FindFirstChild("NamesLabel")
 
@@ -197,6 +205,8 @@ local function broadcastQueueState()
 	local states: {
 		{
 			index: number,
+			maxPlayers: number,
+			title: string,
 			players: { { name: string, displayName: string, userId: number } },
 			countdown: number?,
 			autoStartRemaining: number?,
@@ -218,6 +228,8 @@ local function broadcastQueueState()
 		end
 		table.insert(states, {
 			index = pad.index,
+			maxPlayers = pad.maxPlayers,
+			title = pad.title,
 			players = entries,
 			countdown = pad.countdown,
 			autoStartRemaining = pad.autoStartRemaining,
@@ -281,6 +293,87 @@ local function resetPadRoster(pad: PadState)
 	broadcastQueueState()
 end
 
+local function findInPlaceSpawn(): SpawnLocation?
+	local cabin = Workspace:FindFirstChild("ForestCabinOpening")
+	local forestStart = if cabin then cabin:FindFirstChild("ForestStart") else nil
+	if forestStart and forestStart:IsA("SpawnLocation") then
+		return forestStart
+	end
+	local startSpawn = Workspace:FindFirstChild("StartSpawn")
+	if startSpawn and startSpawn:IsA("SpawnLocation") then
+		return startSpawn
+	end
+	local fallbackSpawn = Workspace:FindFirstChild("SpawnLocation")
+	if fallbackSpawn and fallbackSpawn:IsA("SpawnLocation") then
+		return fallbackSpawn
+	end
+	return nil
+end
+
+local function launchInStudioPlaytest(pad: PadState, group: { Player }, teleportData: { [string]: any })
+	local destSpawn = findInPlaceSpawn()
+	if not destSpawn then
+		for _, p in group do
+			sendNotice(
+				p,
+				false,
+				string.format(
+					"Studio Playtest ready (%d/%d)! Publish with game place %d to test full TeleportService.",
+					#group,
+					pad.maxPlayers,
+					LobbyConfig.GAME_PLACE_ID
+				)
+			)
+		end
+		resetPadRoster(pad)
+		return
+	end
+
+	destSpawn.Enabled = true
+	Workspace:SetAttribute("GameActive", true)
+
+	local enterEv = getRemotes():FindFirstChild("EnterGame")
+	for _, p in group do
+		p:SetAttribute("PartyId", teleportData.PartyId)
+		p.RespawnLocation = destSpawn
+		if enterEv and enterEv:IsA("RemoteEvent") then
+			enterEv:FireClient(p, { PartyId = teleportData.PartyId })
+		end
+	end
+
+	resetPadRoster(pad)
+
+	-- Allow client transition screen to fade black and GameActive server systems to boot
+	task.wait(0.65)
+
+	local baseCF = destSpawn.CFrame * CFrame.new(0, 3.5, 0)
+	local spread = 2.5
+	local halfSpan = (#group - 1) * spread / 2
+	for i, p in group do
+		if p.Parent == Players then
+			p:SetAttribute("InGame", true)
+			local offset = baseCF.RightVector * ((i - 1) * spread - halfSpan)
+			local targetCF = CFrame.new(baseCF.Position + offset)
+				* CFrame.fromMatrix(Vector3.zero, baseCF.RightVector, baseCF.UpVector)
+			task.spawn(function()
+				pcall(function()
+					p:RequestStreamAroundAsync(targetCF.Position)
+				end)
+				if not p.Character then
+					pcall(function()
+						p:LoadCharacter()
+					end)
+				end
+				local char = p.Character
+				if char and char.Parent and p.Parent == Players then
+					char:PivotTo(targetCF)
+				end
+				p:SetAttribute("GameTeleportComplete", true)
+			end)
+		end
+	end
+end
+
 local function doTeleport(pad: PadState)
 	local group: { Player } = {}
 	for _, p in pad.players do
@@ -290,6 +383,17 @@ local function doTeleport(pad: PadState)
 	end
 	if #group == 0 then
 		resetPadRoster(pad)
+		return
+	end
+
+	local teleportData = buildTeleportPayload(pad, group)
+	if RunService:IsStudio() and LobbyConfig.PLAYTEST_IN_PLACE_IN_STUDIO then
+		pad.launching = true
+		pad.countdownThread = nil
+		pad.countdown = nil
+		updatePadVisuals(pad)
+		broadcastQueueState()
+		launchInStudioPlaytest(pad, group, teleportData)
 		return
 	end
 
@@ -309,7 +413,6 @@ local function doTeleport(pad: PadState)
 	updatePadVisuals(pad)
 	broadcastQueueState()
 
-	local teleportData = buildTeleportPayload(pad, group)
 	for _, p in group do
 		teleportRetries[p] = 0
 		sendNotice(p, true, "Reserving private road server...")
@@ -409,7 +512,7 @@ local function startAutoStartTimer(pad: PadState)
 
 	pad.autoStartThread = task.spawn(function()
 		for t = LobbyConfig.AUTO_START_TIMEOUT, 1, -1 do
-			if #pad.players == 0 or #pad.players >= LobbyConfig.QUEUE_SIZE or pad.countdownThread then
+			if #pad.players == 0 or #pad.players >= pad.maxPlayers or pad.countdownThread then
 				pad.autoStartThread = nil
 				pad.autoStartRemaining = nil
 				return
@@ -472,22 +575,18 @@ end
 
 local function addPlayerToPad(player: Player, padIndex: number)
 	local pad = pads[padIndex]
-	if not pad or pad.launching then
+	if not pad or pad.launching or player:GetAttribute("InGame") == true then
 		return
 	end
 	if playerToPad[player] == padIndex then
 		return
 	end
 
-	if #pad.players >= LobbyConfig.QUEUE_SIZE then
+	if #pad.players >= pad.maxPlayers then
 		sendNotice(
 			player,
 			false,
-			"This play circle is full ("
-				.. tostring(LobbyConfig.QUEUE_SIZE)
-				.. "/"
-				.. tostring(LobbyConfig.QUEUE_SIZE)
-				.. ")."
+			"This play circle is full (" .. tostring(pad.maxPlayers) .. "/" .. tostring(pad.maxPlayers) .. ")."
 		)
 		return
 	end
@@ -512,7 +611,7 @@ local function addPlayerToPad(player: Player, padIndex: number)
 	table.insert(pad.players, player)
 	playerToPad[player] = padIndex
 
-	if #pad.players >= LobbyConfig.QUEUE_SIZE then
+	if #pad.players >= pad.maxPlayers then
 		startCountdown(pad)
 	elseif #pad.players == 1 then
 		startAutoStartTimer(pad)
@@ -522,7 +621,9 @@ local function addPlayerToPad(player: Player, padIndex: number)
 	broadcastQueueState()
 end
 
-local function createPad(index: number, cf: CFrame, friendsOnly: boolean): PadState
+local function createPad(index: number, padCfg: LobbyConfig.PadConfig): PadState
+	local cf = padCfg.cf
+	local friendsOnly = padCfg.friendsOnly
 	local model = Instance.new("Model")
 	model.Name = "QueuePad_" .. tostring(index)
 
@@ -580,7 +681,7 @@ local function createPad(index: number, cf: CFrame, friendsOnly: boolean): PadSt
 	titleLabel.Size = UDim2.fromScale(1, 0.32)
 	titleLabel.Position = UDim2.fromScale(0, 0)
 	titleLabel.BackgroundTransparency = 1
-	titleLabel.Text = if friendsOnly then "FRIENDS CIRCLE" else "PLAY CIRCLE #" .. tostring(index)
+	titleLabel.Text = padCfg.title
 	titleLabel.TextColor3 = if friendsOnly then Color3.fromRGB(142, 194, 248) else Color3.fromRGB(234, 206, 144)
 	titleLabel.Font = Enum.Font.Fondamento
 	titleLabel.TextSize = 22
@@ -593,7 +694,7 @@ local function createPad(index: number, cf: CFrame, friendsOnly: boolean): PadSt
 	countLabel.Size = UDim2.fromScale(1, 0.38)
 	countLabel.Position = UDim2.fromScale(0, 0.32)
 	countLabel.BackgroundTransparency = 1
-	countLabel.Text = string.format("0/%d", LobbyConfig.QUEUE_SIZE)
+	countLabel.Text = string.format("0/%d", padCfg.maxPlayers)
 	countLabel.TextColor3 = Color3.fromRGB(168, 174, 168)
 	countLabel.Font = Enum.Font.GothamBold
 	countLabel.TextSize = 24
@@ -621,6 +722,8 @@ local function createPad(index: number, cf: CFrame, friendsOnly: boolean): PadSt
 	return {
 		index = index,
 		cf = cf,
+		maxPlayers = padCfg.maxPlayers,
+		title = padCfg.title,
 		players = {},
 		hostUserId = nil,
 		countdown = nil,
@@ -637,7 +740,7 @@ local function createPad(index: number, cf: CFrame, friendsOnly: boolean): PadSt
 	}
 end
 
-local function bindExistingPad(index: number, model: Model, friendsOnly: boolean): PadState?
+local function bindExistingPad(index: number, model: Model, padCfg: LobbyConfig.PadConfig): PadState?
 	local base = model:FindFirstChild("PadBase")
 	local glow = model:FindFirstChild("PadGlow")
 	local billboard = model:FindFirstChild("PadBillboard")
@@ -653,6 +756,8 @@ local function bindExistingPad(index: number, model: Model, friendsOnly: boolean
 	return {
 		index = index,
 		cf = padCF,
+		maxPlayers = padCfg.maxPlayers,
+		title = padCfg.title,
 		players = {},
 		hostUserId = nil,
 		countdown = nil,
@@ -660,7 +765,7 @@ local function bindExistingPad(index: number, model: Model, friendsOnly: boolean
 		countdownThread = nil,
 		autoStartThread = nil,
 		launching = false,
-		friendsOnly = friendsOnly,
+		friendsOnly = padCfg.friendsOnly,
 		model = model,
 		billboard = bb,
 		padPart = base,
@@ -684,18 +789,23 @@ end
 function QueueService.init()
 	ensureRemoteEvent("QueueUpdate")
 	ensureRemoteEvent("QueueNotice")
+	ensureRemoteEvent("EnterGame")
 
 	local mapContainer = Workspace:FindFirstChild("LobbyMap")
-	local positions = LobbyConfig.PAD_POSITIONS
-	for i = 1, math.min(LobbyConfig.NUM_PADS, #positions) do
-		local isFriendsPad = (i == LobbyConfig.FRIENDS_PAD_INDEX)
+	for i, padCfg in LobbyConfig.PADS do
+		local effectiveCfg: LobbyConfig.PadConfig = {
+			cf = padCfg.cf,
+			maxPlayers = padCfg.maxPlayers,
+			title = padCfg.title,
+			friendsOnly = padCfg.friendsOnly or (i == LobbyConfig.FRIENDS_PAD_INDEX),
+		}
 		local existingPadModel = if mapContainer then mapContainer:FindFirstChild("QueuePad_" .. tostring(i)) else nil
 		local pad: PadState? = nil
 		if existingPadModel and existingPadModel:IsA("Model") then
-			pad = bindExistingPad(i, existingPadModel, isFriendsPad)
+			pad = bindExistingPad(i, existingPadModel, effectiveCfg)
 		end
 		if not pad then
-			pad = createPad(i, positions[i], isFriendsPad)
+			pad = createPad(i, effectiveCfg)
 		end
 		if pad then
 			updatePadVisuals(pad)
@@ -708,6 +818,9 @@ function QueueService.init()
 		while true do
 			task.wait(0.15)
 			for _, player in Players:GetPlayers() do
+				if player:GetAttribute("InGame") == true then
+					continue
+				end
 				local currentPadIdx = playerToPad[player]
 				local detectedPadIdx: number? = nil
 

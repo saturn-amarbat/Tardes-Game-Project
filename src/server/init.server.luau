@@ -1,4 +1,16 @@
 --!strict
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+
+if script:FindFirstChild("Lobby") ~= nil then
+	local LobbyConfig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("LobbyConfig"))
+	if LobbyConfig.shouldStartInLobby() then
+		while Workspace:GetAttribute("GameActive") ~= true do
+			Workspace:GetAttributeChangedSignal("GameActive"):Wait()
+		end
+	end
+end
+
 local RoomGenerator = require(script.RoomGenerator)
 local FlashlightReplicator = require(script.FlashlightReplicator)
 local PrologueManager = require(script.PrologueManager)

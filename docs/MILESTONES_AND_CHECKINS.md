@@ -52,3 +52,9 @@ Every milestone gate (`Gate 0`, `4A`, `4B`, `5A`, `5B`, `6A`, `6B`) verifies:
 - **Remaining:**
   - [ ] **Check-In 6A:** Profile Blackpine Forest (290 pines), `SurveyGallery`, and `StreamingEnabled` (`Atomic`) on real low-end mobile devices and verify touch prompt/button ergonomics.
   - [ ] **Check-In 6B:** Verify live Creator Dashboard funnel data, complete final regression pass, and tag v1 release candidate.
+
+---
+
+## BunkerGrid Redesign (`integration/lobby-bunker-v1`) — Checkpoints 1–4 Preserved (Inactive)
+- [x] **Checkpoints 1–4:** Preserved `Config.luau`, `DoorResolver.luau`, `PrefabLibrary.luau`, `PrefabValidator.luau`, `HallwaySpineV1.luau`, `RoomAssignment.luau`, `ReachabilityValidator.luau`, and 15 active `.rbxm` prefabs alongside full Dark Forest Lobby and original gameplay (`RoomGenerator.generate(10)`).
+- [ ] **Checkpoints 5–7 (Upcoming):** Stalker chase-loop pathfinding, side-monster scares, and live `RoomGenerator` compatibility adapter.

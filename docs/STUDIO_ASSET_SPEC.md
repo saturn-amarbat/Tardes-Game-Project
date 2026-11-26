@@ -42,13 +42,13 @@ ReplicatedStorage
    - Set `SafeRoom = true` on `ToadMakerSafeRoom` templates.
 
 ### 2B. Modular Grid Prefabs (`ServerStorage/BunkerPrefabs` ↔ `assets/BunkerPrefabs/*.rbxm`)
-Verified Checkpoints 1–2 grid prefabs live in `ServerStorage/BunkerPrefabs` (synced from `assets/BunkerPrefabs/` via Rojo) and are enforced on load by `src/server/BunkerGrid/PrefabValidator.luau`:
-- **Dimensions (`BunkerGrid/Config.luau`):** `CELL = 32`, `WALL_H = 12`, `WALL_T = 1`, `DOOR_W = 8`, `DOOR_H = 9`, `HALL_W = 16`.
-- **Mandatory Hierarchy per Model:**
+Verified Checkpoints 1–4 grid prefabs live in `ServerStorage/BunkerPrefabs` (synced from `assets/BunkerPrefabs/` via Rojo) and are enforced on load by `src/server/BunkerGrid/PrefabValidator.luau`:
+- **Dimensions (`BunkerGrid/Config.luau`):** `CELL = 32`, `WALL_H = 12`, `WALL_T = 1`, `DOOR_W = 8`, `DOOR_H = 9`, `HALL_W = 16`, `ROOM_COUNT = 10`.
+- **Mandatory Hierarchy per Model (`ModelStreamingMode = Atomic`):**
   - `PrimaryPart = Floor` (`BasePart`, `Size = (32, 1, 32)` at `(0, -0.5, 0)`, walkable top `Y = 0`).
   - All collidable structural parts strictly inside `[-16, +16]` with zero intra-tile wall overlap.
-  - **5 Hallways:** `HallDeadEnd` (`N`, contains `PlayerSpawn` & `Entrance`), `HallCorner` (`N+E`), `HallStraight` (`N+S`, contains `MonsterSpawn`), `HallT` (`N+E+W`, contains `MonsterSpawn`), `HallCross` (`N+E+S+W`, contains `MonsterSpawn`); hallways never contain `ScareSpawn`.
-  - **11 Single-Door Rooms (North `-Z` opening):** `Room_Mirror`, `Room_ModelSlot`, `Room_Exit` (`Exit` marker `-Z` facing into room + clear lever zone), `Room_Safe` (`SafeRoom = true`, `SurveyDressing = false`, no `ScareSpawn`), `Room_Abandoned`, `Room_Storage`, `Room_Fuse`, `Room_Flooded`, `Room_Study`, `Room_Generator`, `Room_Archive`. Non-safe rooms each contain interior `ScareSpawn`.
+  - **5 Hallways:** `HallDeadEnd` (`N`, `PlayerSpawn` on start tile only), `HallCorner` (`N+E`), `HallStraight` (`N+S`, `MonsterSpawn`), `HallT` (`N+E+W`, `MonsterSpawn`), `HallCross` (`N+E+S+W`, `MonsterSpawn`); hallways never contain `ScareSpawn`.
+  - **10 Active Single-Door Rooms (North `-Z` opening):** `Room_Mirror` (retains abandoned chair/table/mirror atmosphere), `Room_ModelSlot` (`ModelSlot` marker), `Room_Exit` (`Exit` marker `-Z` facing into room + clear lever zone), `Room_Safe` (`SafeRoom = true`, `SurveyDressing = false`, no `ScareSpawn`), `Room_Storage`, `Room_Fuse`, `Room_Flooded`, `Room_Study`, `Room_Generator`, `Room_Archive`. Non-safe rooms each contain interior `ScareSpawn`.
 
 ---
 

@@ -62,6 +62,10 @@ function PrefabValidator.validateOne(
 ): PrefabCheckResult
 	local floor = model.PrimaryPart
 	assert(
+		model.ModelStreamingMode == Enum.ModelStreamingMode.Atomic,
+		model.Name .. ": ModelStreamingMode must be Atomic"
+	)
+	assert(
 		floor ~= nil and floor:IsA("BasePart") and floor.Name == "Floor",
 		model.Name .. ": PrimaryPart must be BasePart named 'Floor'"
 	)
@@ -162,6 +166,10 @@ function PrefabValidator.validateOne(
 		local scare = model:FindFirstChild("ScareSpawn", true)
 		if model.Name == "Room_Safe" then
 			assert(model:GetAttribute("SafeRoom") == true, "Room_Safe must have attribute SafeRoom = true")
+			assert(
+				model:GetAttribute("SurveyDressing") == false,
+				"Room_Safe must have attribute SurveyDressing = false"
+			)
 			assert(scare == nil, "Room_Safe must NOT contain ScareSpawn")
 		else
 			assert(scare ~= nil and scare:IsA("BasePart"), model.Name .. ": non-Safe room missing ScareSpawn")
@@ -170,6 +178,11 @@ function PrefabValidator.validateOne(
 				math.abs(sRel.X) <= interiorLimit and math.abs(sRel.Z) <= interiorLimit,
 				string.format("%s: ScareSpawn outside room interior (%.2f, %.2f)", model.Name, sRel.X, sRel.Z)
 			)
+		end
+
+		if model.Name == "Room_ModelSlot" then
+			local slot = model:FindFirstChild("ModelSlot", true)
+			assert(slot ~= nil and slot:IsA("BasePart"), "Room_ModelSlot missing ModelSlot marker BasePart")
 		end
 
 		if model.Name == "Room_Exit" then
@@ -211,7 +224,6 @@ function PrefabValidator.validateAll(folder: Folder): { PrefabCheckResult }
 		Room_ModelSlot = { isHall = false },
 		Room_Exit = { isHall = false },
 		Room_Safe = { isHall = false },
-		Room_Abandoned = { isHall = false },
 		Room_Storage = { isHall = false },
 		Room_Fuse = { isHall = false },
 		Room_Flooded = { isHall = false },
@@ -230,7 +242,6 @@ function PrefabValidator.validateAll(folder: Folder): { PrefabCheckResult }
 		"Room_ModelSlot",
 		"Room_Exit",
 		"Room_Safe",
-		"Room_Abandoned",
 		"Room_Storage",
 		"Room_Fuse",
 		"Room_Flooded",

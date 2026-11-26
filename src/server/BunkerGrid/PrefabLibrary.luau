@@ -748,13 +748,6 @@ PrefabLibrary.ROOM_SPECS = {
 		floorMat = Enum.Material.Concrete,
 	},
 	{
-		name = "Room_Abandoned",
-		wall = Color3.fromRGB(80, 56, 40),
-		wallMat = Enum.Material.WoodPlanks,
-		floor = Color3.fromRGB(52, 42, 34),
-		floorMat = Enum.Material.WoodPlanks,
-	},
-	{
 		name = "Room_Storage",
 		wall = CONCRETE,
 		wallMat = Enum.Material.Concrete,

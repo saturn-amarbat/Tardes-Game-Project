@@ -802,16 +802,6 @@ local function buildFrog(parent: Instance): Model
 	croak.RollOffMaxDistance = 40
 	croak.Parent = head
 
-	task.spawn(function()
-		while frogModel.Parent do
-			task.wait(8 + math.random() * 11)
-			if croak.Parent then
-				croak.PlaybackSpeed = 0.9 + math.random() * 0.16
-				croak:Play()
-			end
-		end
-	end)
-
 	return frogModel
 end
 
@@ -1076,26 +1066,6 @@ local function buildHorrorDetails(parent: Instance)
 	crackSound.RollOffMinDistance = 16
 	crackSound.RollOffMaxDistance = 110
 	crackSound.Parent = crackPart
-
-	task.spawn(function()
-		while detailFolder.Parent do
-			task.wait(16 + math.random() * 24)
-			if owlSound.Parent then
-				owlSound.PlaybackSpeed = 0.92 + math.random() * 0.14
-				owlSound:Play()
-			end
-		end
-	end)
-
-	task.spawn(function()
-		while detailFolder.Parent do
-			task.wait(22 + math.random() * 32)
-			if crackSound.Parent then
-				crackSound.PlaybackSpeed = 0.85 + math.random() * 0.2
-				crackSound:Play()
-			end
-		end
-	end)
 end
 
 --------------------------------------------------------------------------------
@@ -1190,10 +1160,69 @@ local function buildGroundClutter(parent: Instance)
 	end
 end
 
+local function startSpatialAudioLoops(map: Instance)
+	local frog = map:FindFirstChild("FrogShopkeeper")
+	local headRig = if frog then frog:FindFirstChild("HeadRig") else nil
+	local head = if headRig then headRig:FindFirstChild("Head") else nil
+	local croak = if head then head:FindFirstChild("FrogCroak") else nil
+	if croak and croak:IsA("Sound") then
+		task.spawn(function()
+			while croak.Parent and map.Parent do
+				task.wait(8 + math.random() * 11)
+				if croak.Parent then
+					croak.PlaybackSpeed = 0.9 + math.random() * 0.16
+					croak:Play()
+				end
+			end
+		end)
+	end
+
+	local details = map:FindFirstChild("HorrorDetails")
+	local owlPart = if details then details:FindFirstChild("OwlEmitter") else nil
+	local owlSound = if owlPart then owlPart:FindFirstChild("OwlHoot") else nil
+	if owlSound and owlSound:IsA("Sound") then
+		task.spawn(function()
+			while owlSound.Parent and map.Parent do
+				task.wait(16 + math.random() * 24)
+				if owlSound.Parent then
+					owlSound.PlaybackSpeed = 0.92 + math.random() * 0.14
+					owlSound:Play()
+				end
+			end
+		end)
+	end
+
+	local crackPart = if details then details:FindFirstChild("CrackEmitter") else nil
+	local crackSound = if crackPart then crackPart:FindFirstChild("BranchCrack") else nil
+	if crackSound and crackSound:IsA("Sound") then
+		task.spawn(function()
+			while crackSound.Parent and map.Parent do
+				task.wait(22 + math.random() * 32)
+				if crackSound.Parent then
+					crackSound.PlaybackSpeed = 0.85 + math.random() * 0.2
+					crackSound:Play()
+				end
+			end
+		end)
+	end
+
+	local campfire = map:FindFirstChild("Campfire")
+	local fireCore = if campfire then campfire:FindFirstChild("FireCore") else nil
+	local fireSound = if fireCore then fireCore:FindFirstChild("CampfireSound") else nil
+	if fireSound and fireSound:IsA("Sound") and not fireSound.IsPlaying then
+		fireSound:Play()
+	end
+end
+
 function LobbyScene.build()
+	setupLighting()
+
 	local existing = Workspace:FindFirstChild("LobbyMap")
-	if existing then
-		existing:Destroy()
+	if existing and existing:IsA("Model") then
+		existing.ModelStreamingMode = Enum.ModelStreamingMode.Persistent
+		startSpatialAudioLoops(existing)
+		print("[LobbyScene] Attached to authored Workspace.LobbyMap.")
+		return
 	end
 
 	local map = Instance.new("Model")
@@ -1201,7 +1230,6 @@ function LobbyScene.build()
 	map.ModelStreamingMode = Enum.ModelStreamingMode.Persistent
 	map.Parent = Workspace
 
-	setupLighting()
 	buildGround(map)
 	buildTrees(map)
 	buildRocks(map)
@@ -1212,6 +1240,7 @@ function LobbyScene.build()
 	buildBoundary(map)
 	buildSpawn(map)
 	buildGroundClutter(map)
+	startSpatialAudioLoops(map)
 
 	print("[LobbyScene] Dark Forest Lobby built. Instances: " .. tostring(#map:GetDescendants()))
 end

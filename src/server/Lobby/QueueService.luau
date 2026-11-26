@@ -632,6 +632,37 @@ local function createPad(index: number, cf: CFrame, friendsOnly: boolean): PadSt
 	}
 end
 
+local function bindExistingPad(index: number, model: Model, friendsOnly: boolean): PadState?
+	local base = model:FindFirstChild("PadBase")
+	local glow = model:FindFirstChild("PadGlow")
+	local billboard = model:FindFirstChild("PadBillboard")
+	if not base or not base:IsA("Part") then
+		return nil
+	end
+	local glowPart = if glow and glow:IsA("Part") then glow else nil
+	local glowLight = if glowPart then glowPart:FindFirstChildOfClass("PointLight") else nil
+	local bb = if billboard and billboard:IsA("BillboardGui") then billboard else nil
+	local padCF = CFrame.new(base.Position.X, base.Position.Y - 0.3, base.Position.Z)
+
+	return {
+		index = index,
+		cf = padCF,
+		players = {},
+		hostUserId = nil,
+		countdown = nil,
+		autoStartRemaining = nil,
+		countdownThread = nil,
+		autoStartThread = nil,
+		launching = false,
+		friendsOnly = friendsOnly,
+		model = model,
+		billboard = bb,
+		padPart = base,
+		glowPart = glowPart,
+		glowLight = glowLight,
+	}
+end
+
 local function isPlayerLivingOnPad(player: Player, pad: PadState): boolean
 	local char = player.Character
 	local hrp = char and char:FindFirstChild("HumanoidRootPart")
@@ -648,12 +679,22 @@ function QueueService.init()
 	ensureRemoteEvent("QueueUpdate")
 	ensureRemoteEvent("QueueNotice")
 
+	local mapContainer = Workspace:FindFirstChild("LobbyMap")
 	local positions = LobbyConfig.PAD_POSITIONS
 	for i = 1, math.min(LobbyConfig.NUM_PADS, #positions) do
 		local isFriendsPad = (i == LobbyConfig.FRIENDS_PAD_INDEX)
-		local pad = createPad(i, positions[i], isFriendsPad)
-		updatePadVisuals(pad)
-		table.insert(pads, pad)
+		local existingPadModel = if mapContainer then mapContainer:FindFirstChild("QueuePad_" .. tostring(i)) else nil
+		local pad: PadState? = nil
+		if existingPadModel and existingPadModel:IsA("Model") then
+			pad = bindExistingPad(i, existingPadModel, isFriendsPad)
+		end
+		if not pad then
+			pad = createPad(i, positions[i], isFriendsPad)
+		end
+		if pad then
+			updatePadVisuals(pad)
+			table.insert(pads, pad)
+		end
 	end
 
 	-- Reliable spatial occupancy polling (avoids multi-limb TouchEnded flicker)

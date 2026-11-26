@@ -107,12 +107,17 @@ local function buildPersistentHud()
 	local bar = Instance.new("Frame")
 	bar.Name = "BottomBar"
 	bar.AnchorPoint = Vector2.new(0.5, 1)
-	bar.Size = UDim2.fromOffset(396, 46)
+	bar.Size = UDim2.new(0.92, 0, 0, 46)
 	bar.Position = UDim2.new(0.5, 0, 1, -14)
 	bar.BackgroundColor3 = Color3.fromRGB(14, 17, 16)
 	bar.BackgroundTransparency = 0.16
 	bar.BorderSizePixel = 0
 	bar.Parent = gui
+
+	local barSize = Instance.new("UISizeConstraint")
+	barSize.MaxSize = Vector2.new(410, 46)
+	barSize.MinSize = Vector2.new(280, 42)
+	barSize.Parent = bar
 
 	local barCorner = Instance.new("UICorner")
 	barCorner.CornerRadius = UDim.new(0, 10)
@@ -127,13 +132,13 @@ local function buildPersistentHud()
 	layout.FillDirection = Enum.FillDirection.Horizontal
 	layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 	layout.VerticalAlignment = Enum.VerticalAlignment.Center
-	layout.Padding = UDim.new(0, 10)
+	layout.Padding = UDim.new(0.02, 4)
 	layout.Parent = bar
 
-	local function makeBarBtn(name: string, text: string, bgColor: Color3, width: number): TextButton
+	local function makeBarBtn(name: string, text: string, bgColor: Color3, widthScale: number): TextButton
 		local btn = Instance.new("TextButton")
 		btn.Name = name
-		btn.Size = UDim2.fromOffset(width, 34)
+		btn.Size = UDim2.fromScale(widthScale, 0.74)
 		btn.BackgroundColor3 = bgColor
 		btn.Text = text
 		btn.TextColor3 = Typography.Colors.Bone
@@ -148,9 +153,9 @@ local function buildPersistentHud()
 		return btn
 	end
 
-	local inviteBtn = makeBarBtn("InviteBtn", "Invite Friends", Color3.fromRGB(46, 82, 128), 126)
-	local shopBtn = makeBarBtn("ShopBtn", "Shop", Color3.fromRGB(54, 108, 66), 110)
-	local sitBtn = makeBarBtn("SitBtn", "Sit / Stand", Color3.fromRGB(62, 58, 48), 116)
+	local inviteBtn = makeBarBtn("InviteBtn", "Invite Friends", Color3.fromRGB(46, 82, 128), 0.32)
+	local shopBtn = makeBarBtn("ShopBtn", "Shop", Color3.fromRGB(54, 108, 66), 0.28)
+	local sitBtn = makeBarBtn("SitBtn", "Sit / Stand", Color3.fromRGB(62, 58, 48), 0.3)
 
 	inviteBtn.Activated:Connect(function()
 		local canOk, canInvite = pcall(function()

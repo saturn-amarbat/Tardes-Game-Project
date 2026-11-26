@@ -757,16 +757,20 @@ local function buildShopGui(): ScreenGui
 	titleCorner.Parent = titleBar
 
 	local titleLabel = Instance.new("TextLabel")
-	titleLabel.Size = UDim2.fromScale(0.55, 1)
+	titleLabel.Size = UDim2.new(1, -204, 1, 0)
 	titleLabel.Position = UDim2.fromOffset(16, 0)
 	titleLabel.BackgroundTransparency = 1
 	titleLabel.Text = "Frog Merchant"
 	titleLabel.TextColor3 = ACCENT_GOLD
 	titleLabel.Font = Typography.Fonts.Calligraphy
-	titleLabel.TextSize = 26
+	titleLabel.TextScaled = true
 	Typography.applyStroke(titleLabel, 0.3)
 	titleLabel.TextXAlignment = Enum.TextXAlignment.Left
 	titleLabel.Parent = titleBar
+	local titleTextConstraint = Instance.new("UITextSizeConstraint")
+	titleTextConstraint.MaxTextSize = 26
+	titleTextConstraint.MinTextSize = 16
+	titleTextConstraint.Parent = titleLabel
 
 	local coinDisplay = Instance.new("TextLabel")
 	coinDisplay.Name = "CoinDisplay"

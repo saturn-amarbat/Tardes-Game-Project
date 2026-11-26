@@ -70,7 +70,7 @@ local function buildHud(): ScreenGui
 	local frame = Instance.new("Frame")
 	frame.Name = "StatusFrame"
 	frame.AnchorPoint = Vector2.new(0.5, 0)
-	frame.Size = UDim2.fromOffset(330, 96)
+	frame.Size = UDim2.new(0.92, 0, 0, 96)
 	frame.Position = UDim2.new(0.5, 0, 0, 14)
 	frame.BackgroundColor3 = Color3.fromRGB(14, 17, 16)
 	frame.BackgroundTransparency = 0.14
@@ -78,6 +78,11 @@ local function buildHud(): ScreenGui
 	frame.Visible = false
 	frame.Parent = gui
 	statusFrame = frame
+
+	local frameSize = Instance.new("UISizeConstraint")
+	frameSize.MaxSize = Vector2.new(340, 96)
+	frameSize.MinSize = Vector2.new(260, 96)
+	frameSize.Parent = frame
 
 	local frameCorner = Instance.new("UICorner")
 	frameCorner.CornerRadius = UDim.new(0, 10)

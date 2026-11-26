@@ -41,6 +41,15 @@ ReplicatedStorage
    - Add `SurveyMount` `Attachment` (`4` studs above floor, `-Z` toward walkway) to explicitly position `SurveyGallery` cabinets, or set boolean attribute `SurveyDressing = false` to opt a template out.
    - Set `SafeRoom = true` on `ToadMakerSafeRoom` templates.
 
+### 2B. Modular Grid Prefabs (`ServerStorage/BunkerPrefabs` ↔ `assets/BunkerPrefabs/*.rbxm`)
+Verified Checkpoints 1–2 grid prefabs live in `ServerStorage/BunkerPrefabs` (synced from `assets/BunkerPrefabs/` via Rojo) and are enforced on load by `src/server/BunkerGrid/PrefabValidator.luau`:
+- **Dimensions (`BunkerGrid/Config.luau`):** `CELL = 32`, `WALL_H = 12`, `WALL_T = 1`, `DOOR_W = 8`, `DOOR_H = 9`, `HALL_W = 16`.
+- **Mandatory Hierarchy per Model:**
+  - `PrimaryPart = Floor` (`BasePart`, `Size = (32, 1, 32)` at `(0, -0.5, 0)`, walkable top `Y = 0`).
+  - All collidable structural parts strictly inside `[-16, +16]` with zero intra-tile wall overlap.
+  - **5 Hallways:** `HallDeadEnd` (`N`, contains `PlayerSpawn` & `Entrance`), `HallCorner` (`N+E`), `HallStraight` (`N+S`, contains `MonsterSpawn`), `HallT` (`N+E+W`, contains `MonsterSpawn`), `HallCross` (`N+E+S+W`, contains `MonsterSpawn`); hallways never contain `ScareSpawn`.
+  - **11 Single-Door Rooms (North `-Z` opening):** `Room_Mirror`, `Room_ModelSlot`, `Room_Exit` (`Exit` marker `-Z` facing into room + clear lever zone), `Room_Safe` (`SafeRoom = true`, `SurveyDressing = false`, no `ScareSpawn`), `Room_Abandoned`, `Room_Storage`, `Room_Fuse`, `Room_Flooded`, `Room_Study`, `Room_Generator`, `Room_Archive`. Non-safe rooms each contain interior `ScareSpawn`.
+
 ---
 
 ## 3. NPC Character Models (`ReplicatedStorage/NPCModels`)

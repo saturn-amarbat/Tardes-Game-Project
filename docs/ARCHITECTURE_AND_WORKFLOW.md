@@ -13,6 +13,8 @@ c:/Users/sanch/Projects/horror-game/
 ├── rokit.toml                          # Rokit toolchain manifest (Rojo, Wally, StyLua, Selene)
 ├── forest-preview.project.json         # Standalone preview project for Forest Cabin
 ├── lobby.project.json                  # Standalone Rojo project for Dark Forest Lobby place
+├── assets/
+│   └── BunkerPrefabs/                  # 16 committed .rbxm grid prefabs -> ServerStorage/BunkerPrefabs
 ├── docs/
 │   ├── DECISIONS_AND_CHANGELOG.md      # ADRs (why decisions were made) & commit log
 │   ├── MILESTONES_AND_CHECKINS.md      # Milestone gates & recurring 4-point check-ins
@@ -48,6 +50,12 @@ c:/Users/sanch/Projects/horror-game/
     │   ├── InteractionRouter.luau      # Centralized ProximityPromptService validator & hold cleanup
     │   ├── MazeVariations.luau         # 8x8x8 (512) R.E.P.O. themes, hubs, wings & props
     │   ├── RoomGenerator.luau          # Branching modular maze snapping, SafeRoom & bulkhead seals
+    │   ├── BunkerGrid/                 # Grid-snapped 32x32 bunker foundation (Checkpoints 1-2)
+    │   │   ├── Config.luau             # Locked CELL/doorway/wall & Stalker agent constants
+    │   │   ├── DoorResolver.luau         # 4-bit NESW door bitmask & CW rotation lookup
+    │   │   ├── PrefabLibrary.luau        # ServerStorage/BunkerPrefabs builder & loader
+    │   │   └── PrefabValidator.luau      # Structural bounds, marker & 0-overlap assertions
+    │   ├── BunkerHallways/             # Cellar hatch drop (SquadFall) & legacy hallway fallback
     │   ├── TeleportManager.luau        # Streaming-safe player & squad teleports
     │   ├── MatchScaleManager.luau      # 1–4 player scaling, run lifecycle, mid-run revives
     │   ├── ObjectivePickups.luau       # Server-locked key & ceramic fuse spawns
@@ -147,7 +155,7 @@ c:/Users/sanch/Projects/horror-game/
 
 ## 4. Partially Managed Rojo & Team Create Rules
 
-[default.project.json](file:///c:/Users/sanch/Projects/horror-game/default.project.json) uses `"$ignoreUnknownInstances": true` on `Workspace`, `ReplicatedStorage`, `Lighting`, and `StarterGui`. Rojo never deletes Team Create assets, Collaborative Editing / Drafts stays **OFF**, and all `.luau` edits happen strictly on disk in `src/`.
+[default.project.json](../default.project.json) uses `"$ignoreUnknownInstances": true` on `Workspace`, `ReplicatedStorage`, `ServerStorage`, `Lighting`, and `StarterGui`, while syncing tracked `.rbxm` grid prefabs from `assets/BunkerPrefabs/` into `ServerStorage/BunkerPrefabs`. Rojo never deletes Team Create assets, Collaborative Editing / Drafts stays **OFF**, and all `.luau` edits happen strictly on disk in `src/`.
 
 ---
 

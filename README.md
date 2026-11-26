@@ -52,7 +52,7 @@ The server will bind to `http://localhost:34872`.
 To prevent data loss, conflicts, and sync desynchronization:
 1. **Disable Collaborative Editing / Script Drafts**: In Roblox Studio Game Settings, Collaborative Editing / Drafts mode must be **OFF**. Rojo expects script changes to apply directly without draft conflicts.
 2. **Partially Managed Tree (`$ignoreUnknownInstances: true`)**:
-   [default.project.json](file:///c:/Users/sanch/Projects/horror-game/default.project.json) specifies `"$ignoreUnknownInstances": true` on `Workspace`, `ReplicatedStorage`, `Lighting`, and `StarterGui`. This ensures Rojo only manages files present in `src/` and **never deletes** 3D maps, room templates, models, lighting configurations, or raw UI created in Studio Team Create.
+   [default.project.json](default.project.json) specifies `"$ignoreUnknownInstances": true` on `Workspace`, `ReplicatedStorage`, `ServerStorage`, `Lighting`, and `StarterGui`, while mapping `ServerStorage/BunkerPrefabs` to `assets/BunkerPrefabs/`. This ensures Rojo syncs tracked `.rbxm` bunker grid prefabs alongside `src/` and **never deletes** 3D maps, room templates, models, lighting configurations, or raw UI created in Studio Team Create.
 3. **No In-Studio Script Edits**: Never edit `.luau` scripts inside Roblox Studio via MCP (`multi_edit`) or the Studio script editor. All script modifications must happen on disk inside `src/` to guarantee clean Git version tracking and automated linting.
 
 ---
@@ -142,3 +142,9 @@ Every time a squad enters the bunker (`MatchScaleManager.reset()` $\to$ `RoomGen
 - **8 Architectural Themes** (`McJannek Station`, `Headman Manor Wing`, `Hydro Turbine Sublevel`, `Core Reactor Block`, `Blackpine Sanatorium`, `Collapsed Archive`, `Cryo Storage Bay`, `Deep Survey Vault`) re-theming floors, walls, ceilings, lights, and dust motes.
 - **8 Modular Topologies** (`Spine & Pockets`, `Twin-Wing Crossroads`, `Spiral Switchback`, `Grand Atrium Hubs`, `Sublevel Bypass Grid`, `Maintenance Gauntlet`, `Shattered Labyrinth`, `Deep Vault Sector`) combining `RoomTemplates` with procedural `CrossHub`, `TJunctionL/R`, `CornerLeft/Right`, `SplitCourt`, `StepGallery`, and sealed branching wing vaults.
 - **8 Wall/Corner Decoration Sets** (`Supply Crates`, `Bio-Fungal Overgrowth`, `Power Conduits`, `Survey Archives`, `Boilers & Valves`, `Lockdown Barricades`, `Abandoned Quarters`, `Anomaly Salvage Caches`) placed via collision-safe raycasts along perimeter walls without obstructing doorways or `MainNPC_Stalker` paths.
+
+### Modular Grid Bunker Prefabs (`src/server/BunkerGrid/`, Checkpoints 1–2)
+Checkpoints 1–2 of the uniform-grid bunker redesign are implemented and tracked in Git:
+- **Single Source of Truth (`src/server/BunkerGrid/Config.luau`):** Locks `CELL = 32`, `WALL_H = 12`, `WALL_T = 1`, `DOOR_W = 8`, `DOOR_H = 9`, `HALL_W = 16`, and Stalker Pathfinding params (`AgentRadius = 2.0`, `AgentHeight = 7.0`, `AgentCanJump = false`) sized to Studio's `MainNPC_Stalker` rig (`2.81 × 6.39 × 1.57`).
+- **4-Bit NESW Resolver & Prefab Validator:** `DoorResolver.luau` maps all 15 4-bit door masks and rotations `0..3`; `PrefabLibrary.luau` and `PrefabValidator.luau` enforce `(32, 1, 32)` `Floor` `PrimaryPart`, `<= ±16` bounds, zero wall overlaps, `Entrance`/`Exit` directions, `Room_Safe` attributes, hallway `MonsterSpawn`, and interior-only `ScareSpawn`.
+- **Tracked Binary Models (`assets/BunkerPrefabs/*.rbxm`):** Exports and syncs all 16 modular prefabs (`5` hallways + `11` rooms) into `ServerStorage/BunkerPrefabs` via [default.project.json](default.project.json). *(Checkpoint 3+ runtime spine/BFS builder and `RoomGenerator`/`SquadFall` wiring remain upcoming.)*

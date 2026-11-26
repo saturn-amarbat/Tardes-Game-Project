@@ -89,13 +89,19 @@ for _, entry in BASE_MASKS do
 end
 
 function DoorResolver.resolveHallway(doorMask: number): ResolvedTile?
-	return HALL_LOOKUP[bit32.band(doorMask, 15)]
+	if typeof(doorMask) ~= "number" or doorMask % 1 ~= 0 or doorMask < 1 or doorMask > 15 then
+		return nil
+	end
+	return HALL_LOOKUP[doorMask]
 end
 
 --- Resolves clockwise rotation steps for any single-door prefab whose base doorway faces North (1).
 function DoorResolver.resolveRoomRotation(openDirMask: number): number?
+	if typeof(openDirMask) ~= "number" or openDirMask % 1 ~= 0 or openDirMask < 1 or openDirMask > 15 then
+		return nil
+	end
 	for rot = 0, 3 do
-		if DoorResolver.rotateMaskCW(DoorResolver.N, rot) == bit32.band(openDirMask, 15) then
+		if DoorResolver.rotateMaskCW(DoorResolver.N, rot) == openDirMask then
 			return rot
 		end
 	end

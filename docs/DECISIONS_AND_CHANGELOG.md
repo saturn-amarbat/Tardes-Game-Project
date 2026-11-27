@@ -2,7 +2,7 @@
 
 This document records the major implementation steps completed on **Tardes**, the bugs or constraints observed during development and playtesting, and **why** each architectural decision was made.
 
-Current verified baseline: **`main` at `24f25b3`** (+ Studio Atmosphere, Lobby & Audit Fixes synced).
+Audited source baseline: **`main` at `3878e6d3`** (source audited `2026-11-26`; Studio runtime and shared-place recovery remain pending Phase 0 verification — see [PHASE_0_READINESS.md](PHASE_0_READINESS.md)).
 
 ---
 
@@ -72,6 +72,12 @@ Current verified baseline: **`main` at `24f25b3`** (+ Studio Atmosphere, Lobby &
   3. Store the 15 validated `.rbxm` models in `assets/BunkerPrefabs/` mapped under `ServerStorage/BunkerPrefabs` (`$ignoreUnknownInstances: true`).
 - **Why:** Legacy `ReplicatedStorage/RoomTemplates` (`14–37.5` studs) replicated all rooms to clients on join, varied in size so `SafeRoomService` booths and `LShapedCabinStudy` collided or crowded corridors, and Studio `MainNPC_Stalker` (`6.39` tall) exceeded old `AgentHeight = 5.5` against tight doors. Keeping prefabs in `ServerStorage` backed by `.rbxm` files in Git keeps client join memory low and makes studio assets reproducible.
 
+### ADR-12: Proposed Phase 0 Documentation Sync, Team Workflow & Recovery Governance *(Pending Joint Confirmation)*
+- **Decision (Proposed):**
+  1. Establish [PHASE_0_READINESS.md](PHASE_0_READINESS.md), [TEAM_WORKFLOW.md](TEAM_WORKFLOW.md), and [TARDES_Engineering_Handoff_Report.md](TARDES_Engineering_Handoff_Report.md) as the shared Phase 0 operating record, explicitly distinguishing source-verified (`3878e6d3`), runtime-verified, reported, proposed, and jointly approved states.
+  2. Gate any shared-place Rojo connection (`Project Horror`) behind isolated local `.rbxl` recovery validation, Creative Asset preservation (including Studio-only `Room_Abandoned` triage), and explicit approval from both leads.
+- **Why:** Prior baselines in docs (`fa845b6`, `24f25b3`, Team Create `v46`) had fallen behind `main` (`3878e6d3`), while key team boundaries and Phase 0 recovery gates lived in separate AI conversation threads rather than versioned Markdown. Pending joint lead review on the docs PR before merge.
+
 ---
 
 ## Chronological Implementation History
@@ -101,3 +107,5 @@ Current verified baseline: **`main` at `24f25b3`** (+ Studio Atmosphere, Lobby &
 | `2860ae4` | `BunkerGrid` Checkpoints 1–2 | Added `src/server/BunkerGrid/` (`Config.luau`, `DoorResolver.luau`, `PrefabLibrary.luau`, `PrefabValidator.luau`) and exported binary `.rbxm` prefabs to `assets/BunkerPrefabs/`. |
 | `780570a` | `BunkerGrid` Checkpoints 3–4 | Retired `Room_Abandoned` (`15` active prefabs), added `HallwaySpineV1`, `RoomAssignment`, `ReachabilityValidator`, and verified seams, 100-seed matrix, and physical `PathfindingService` reachability. |
 | `integration/lobby-bunker-v1` | R1 Recovery Integration | Restored full Dark Forest Lobby (`feature/lobby` `57bd2dd`), stamina, and flashlight battery while preserving inactive `BunkerGrid` Checkpoints 1–4. |
+| `3878e6d` | `BunkerGrid` Checkpoint 5 Source | Merged PR `#6` (`StalkerNavigator.luau` and `Checkpoint5Test.luau`); inactive in live gameplay and pending isolated Studio runtime test. |
+| `docs/phase-0-project-handoff` | Phase 0 Docs Sync *(Proposed)* | Added `PHASE_0_READINESS.md`, `TEAM_WORKFLOW.md`, and `TARDES_Engineering_Handoff_Report.md`; updated docs to audited `main` (`3878e6d3`) and open Phase 0 recovery gates (pending joint review). |

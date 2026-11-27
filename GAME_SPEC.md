@@ -32,5 +32,6 @@
 - **Post-Launch Expansions:** Additional sectors/floors, new monsters/rooms, class/progression expansions, and steady updates using ethical, transparent pricing (no fake timers or false scarcity).
 
 ## 5. Engineering & Agent Boundaries
-- `AGENTS.md` governs repository and AI tool rules: edit `.luau` scripts **only** on disk in `src/` (`--!strict`), pass `stylua --check src` and `selene src`, keep `"$ignoreUnknownInstances": true` in `default.project.json`, never edit Rojo-synced scripts inside Studio via MCP, and branch from a freshly fetched `origin/main`.
+- [AGENTS.md](AGENTS.md) governs repository and AI tool rules: edit `.luau` scripts **only** on disk in `src/` (`--!strict`), pass `stylua --check src` and `selene src`, keep `"$ignoreUnknownInstances": true` in `default.project.json`, never edit Rojo-synced scripts inside Studio via MCP, and branch from a freshly fetched `origin/main`.
+- **Team Workflow & Phase 0 Gate:** See [docs/TEAM_WORKFLOW.md](docs/TEAM_WORKFLOW.md) for Engineering/Creative ownership and handoff boundaries, and [docs/PHASE_0_READINESS.md](docs/PHASE_0_READINESS.md) for current recovery and verification gates before shared-place integration.
 - **Gameplay Preservation:** The `BunkerGrid` redesign is strictly a scoped replacement of the bunker dungeon generation subsystem. Existing lobby entry, player movement, stamina/sprinting, flashlight optics/battery, HUD, audio, progression, and multiplayer systems must be preserved.

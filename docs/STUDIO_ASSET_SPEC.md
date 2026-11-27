@@ -1,6 +1,9 @@
 # Roblox Studio Asset Specification
 
-This document defines the exact instance names, hierarchy paths, property contracts, and lighting rules for assets authored in **Roblox Studio Team Create** (`Project Horror`, latest verified save **version `46`**).
+This document defines the exact instance names, hierarchy paths, property contracts, and lighting rules for assets authored in **Roblox Studio Team Create** (`Project Horror`, historical verified save reference: **version `46`**; current shared Studio state is unverified pending Phase 0 recovery).
+
+> [!IMPORTANT]
+> See [TEAM_WORKFLOW.md](TEAM_WORKFLOW.md) and [PHASE_0_READINESS.md](PHASE_0_READINESS.md) for asset ownership and integration workflow. Do not alter rig, anchor, marker, audio, or UI contracts without engineering verification and joint lead coordination, and retain existing gameplay-critical assets until replacements are verified in isolation.
 
 ---
 

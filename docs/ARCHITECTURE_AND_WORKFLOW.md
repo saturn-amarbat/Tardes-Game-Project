@@ -5,7 +5,7 @@
 The project follows a modular `--!strict` Luau architecture managed via Rojo and Git. Code is separated into server-authoritative services, client controllers/renderers, and replicated shared registries.
 
 ```
-c:/Users/sanch/Projects/horror-game/
+Tardes-Game-Project/
 ├── GAME_SPEC.md                        # Canonical Single Source of Truth
 ├── AGENTS.md                           # Strict agent boundaries & ownership rules
 ├── README.md                           # Quickstart, baseline status & doc index
@@ -14,8 +14,11 @@ c:/Users/sanch/Projects/horror-game/
 ├── forest-preview.project.json         # Standalone preview project for Forest Cabin
 ├── lobby.project.json                  # Standalone Rojo project for Dark Forest Lobby place
 ├── assets/
-│   └── BunkerPrefabs/                  # 16 committed .rbxm grid prefabs -> ServerStorage/BunkerPrefabs
+│   └── BunkerPrefabs/                  # 15 committed .rbxm grid prefabs -> ServerStorage/BunkerPrefabs
 ├── docs/
+│   ├── PHASE_0_READINESS.md            # Open Phase 0 recovery gates & verification checklist
+│   ├── TEAM_WORKFLOW.md                # Proposed team ownership, AI boundaries & handoff rules
+│   ├── TARDES_Engineering_Handoff_Report.md # Reconstructed engineering handoff summary
 │   ├── DECISIONS_AND_CHANGELOG.md      # ADRs (why decisions were made) & commit log
 │   ├── MILESTONES_AND_CHECKINS.md      # Milestone gates & recurring 4-point check-ins
 │   ├── GAME_DESIGN_AND_RESEARCH.md     # Core loop, story beats, scaling & monetization
@@ -28,6 +31,7 @@ c:/Users/sanch/Projects/horror-game/
 └── src/
     ├── client/                         # StarterPlayerScripts/Client
     │   ├── init.client.luau            # Client bootstrap & controller startup
+    │   ├── BunkerFall.client.luau      # Cellar hatch drop camera/wind/fade transition
     │   ├── FieldJournal.luau           # [J] Lore archive, flashlight tints & squad support UI
     │   ├── FlashlightController.luau   # Detached damped flashlight, sway, raycast clip, battery
     │   ├── FlashlightOptics.luau       # Dual-cone SpotLights, mobile FillPointLight & dust Beam
@@ -46,16 +50,24 @@ c:/Users/sanch/Projects/horror-game/
     │       ├── QueueHudController.luau # Play-circle HUD, countdown, avatar headshots & notices
     │       └── ShopGuiController.luau  # Responsive ViewportFrame cosmetic Shop UI & confirm modal
     ├── server/                         # ServerScriptService/Server
-    │   ├── init.server.luau            # Server bootstrap & expedition generation loop
+    │   ├── init.server.luau            # Active server bootstrap -> RoomGenerator.generate(10)
+    │   ├── BunkerEntry.server.luau     # Attaches CellarHatch/SurveyLift descent via SquadFall
     │   ├── InteractionRouter.luau      # Centralized ProximityPromptService validator & hold cleanup
-    │   ├── MazeVariations.luau         # 8x8x8 (512) R.E.P.O. themes, hubs, wings & props
-    │   ├── RoomGenerator.luau          # Branching modular maze snapping, SafeRoom & bulkhead seals
-    │   ├── BunkerGrid/                 # Grid-snapped 32x32 bunker foundation (Checkpoints 1-2)
+    │   ├── MazeVariations.luau         # 8x8x8 (512) R.E.P.O. themes, hubs, wings & props (active)
+    │   ├── RoomGenerator.luau          # Active branching maze snapping, SafeRoom & bulkhead seals
+    │   ├── BunkerGrid/                 # Isolated 32x32 bunker grid (Checkpoints 1–5; inactive)
     │   │   ├── Config.luau             # Locked CELL/doorway/wall & Stalker agent constants
     │   │   ├── DoorResolver.luau         # 4-bit NESW door bitmask & CW rotation lookup
     │   │   ├── PrefabLibrary.luau        # ServerStorage/BunkerPrefabs builder & loader
-    │   │   └── PrefabValidator.luau      # Structural bounds, marker & 0-overlap assertions
-    │   ├── BunkerHallways/             # Cellar hatch drop (SquadFall) & legacy hallway fallback
+    │   │   ├── PrefabValidator.luau      # Structural bounds, marker & 0-overlap assertions
+    │   │   ├── HallwaySpineV1.luau       # Seeded 12-cell hallway spine & chase-loop builder
+    │   │   ├── RoomAssignment.luau       # Deterministic 10-room placement & Exit-last ordering
+    │   │   ├── ReachabilityValidator.luau# Async PathfindingService reachability checks
+    │   │   ├── StalkerNavigator.luau     # Humanoid + PathfindingService navigator (Checkpoint 5)
+    │   │   ├── Checkpoint3Test.luau      # Isolated Checkpoints 1–3 test suite (manual invoke)
+    │   │   ├── Checkpoint4Test.luau      # Isolated Checkpoint 4 reachability suite (manual invoke)
+    │   │   └── Checkpoint5Test.luau      # Isolated Checkpoint 5 Stalker suite (manual invoke)
+    │   ├── BunkerHallways/             # Descent (SquadFall via BunkerEntry) & hallway modules (Config/Layout/Pieces/MonsterRegistry)
     │   ├── TeleportManager.luau        # Streaming-safe player & squad teleports
     │   ├── MatchScaleManager.luau      # 1–4 player scaling, run lifecycle, mid-run revives
     │   ├── ObjectivePickups.luau       # Server-locked key & ceramic fuse spawns
@@ -96,9 +108,10 @@ c:/Users/sanch/Projects/horror-game/
 
 ## 2. Server-Side Systems (`src/server/`)
 
-### `init.server.luau`
-- **Role**: Server master entry point.
-- **Workflow**: Initializes `InteractionRouter`, `FlashlightReplicator`, `PrologueManager`, `FunnelAnalytics`, `SafeRoomService`, and `MonetizationService`, then binds `MatchScaleManager.init(...)` to rebuild `RoomGenerator.generate(10)`, `NPCManager.init(rooms)`, `ClueSystem.init(rooms)`, `MaintenanceBay.install(...)`, `SurveyGallery.install(rooms)`, and `SafeRoomService.install(rooms)` on each expedition.
+### `init.server.luau` (Active Gameplay Bootstrap vs. Isolated Grid)
+- **Role**: Active server master entry point.
+- **Active Workflow**: Optionally waits for `Workspace:GetAttribute("GameActive") == true` when `Lobby` is present and `LobbyConfig.shouldStartInLobby()` is enabled, then initializes `InteractionRouter`, `FlashlightReplicator`, `PrologueManager`, `FunnelAnalytics`, `SafeRoomService`, and `MonetizationService`, and binds `MatchScaleManager.init(...)` to rebuild `RoomGenerator.generate(10)` (with `MazeVariations`), `NPCManager.init(rooms)`, `ClueSystem.init(rooms)`, `MaintenanceBay.install(...)`, `SurveyGallery.install(rooms)`, and `SafeRoomService.install(rooms)` on each expedition. Separately, `BunkerEntry.server.luau` invokes `BunkerHallways.SquadFall` for cellar descent.
+- **Isolated / Inactive Modules**: `src/server/BunkerGrid/` (Checkpoints 1–5, including `StalkerNavigator.luau` and `Checkpoint3Test`–`Checkpoint5Test`) is **not** invoked by `init.server.luau`; its test suites run only when explicitly triggered in an isolated Studio test environment.
 
 ### `InteractionRouter.luau`
 - **Role**: Centralized `ProximityPromptService` dispatcher (`PromptTriggered`, `PromptButtonHoldBegan`, `PromptButtonHoldEnded`, `TriggerEnded`).
@@ -155,7 +168,12 @@ c:/Users/sanch/Projects/horror-game/
 
 ## 4. Partially Managed Rojo & Team Create Rules
 
-[default.project.json](../default.project.json) uses `"$ignoreUnknownInstances": true` on `Workspace`, `ReplicatedStorage`, `ServerStorage`, `Lighting`, and `StarterGui`, while syncing tracked `.rbxm` grid prefabs from `assets/BunkerPrefabs/` into `ServerStorage/BunkerPrefabs`. Rojo never deletes Team Create assets, Collaborative Editing / Drafts stays **OFF**, and all `.luau` edits happen strictly on disk in `src/`.
+[default.project.json](../default.project.json) uses `"$ignoreUnknownInstances": true` on `Workspace`, `ReplicatedStorage`, `ServerStorage`, `ServerStorage/BunkerPrefabs`, `Lighting`, and `StarterGui`, while syncing 15 tracked `.rbxm` grid prefabs from `assets/BunkerPrefabs/` into `ServerStorage/BunkerPrefabs`.
+
+> [!WARNING]
+> **Recovery Safety Caveat:** `"$ignoreUnknownInstances": true` only leaves unknown sibling instances at those configured roots unmanaged; it does **not** protect descendants inside tracked `.rbxm` models or unignored containers (`ServerScriptService/Server`, `StarterPlayerScripts/Client`), and it does not prevent duplicate instances if Studio holds unmapped copies. Do **not** connect Rojo to the shared `Project Horror` Team Create place during active recovery until isolated validation and joint approval in [PHASE_0_READINESS.md](PHASE_0_READINESS.md) are complete.
+
+Collaborative Editing / Drafts must remain **OFF**, and all `.luau` edits happen strictly on disk in `src/`.
 
 ---
 
@@ -163,4 +181,4 @@ c:/Users/sanch/Projects/horror-game/
 
 1. Branch from freshly fetched `origin/main` (`feat/<name>`, `fix/<name>`, `docs/<name>`).
 2. Format & lint before every commit: `stylua src && stylua --check src && selene src`.
-3. Merge via `--no-ff` and keep Team Create saved cleanly (`File > Save to Roblox`) alongside pushed Git history.
+3. Merge via `--no-ff` after joint review where required ([TEAM_WORKFLOW.md](TEAM_WORKFLOW.md)) and keep Team Create saved cleanly (`File > Save to Roblox`) alongside pushed Git history.

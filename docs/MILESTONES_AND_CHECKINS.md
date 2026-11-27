@@ -1,6 +1,6 @@
 # Milestones & Progress Check-In Plan
 
-This document tracks milestone gates, completed check-ins, and remaining work for **Tardes**. For the architectural rationale behind completed steps, see [docs/DECISIONS_AND_CHANGELOG.md](file:///c:/Users/sanch/Projects/horror-game/docs/DECISIONS_AND_CHANGELOG.md).
+This document tracks milestone gates, completed check-ins, and remaining work for **Tardes**. For the architectural rationale behind completed steps, see [docs/DECISIONS_AND_CHANGELOG.md](DECISIONS_AND_CHANGELOG.md).
 
 ---
 
@@ -14,8 +14,17 @@ Every milestone gate (`Gate 0`, `4A`, `4B`, `5A`, `5B`, `6A`, `6B`) verifies:
 
 ---
 
+## Phase 0: Development Readiness & Recovery — OPEN
+- **Status (`2026-11-26`):** Source baseline audited at `main` (`3878e6d3`); shared-place Rojo recovery and live Studio verification remain open.
+- **Required Gates (see [PHASE_0_READINESS.md](PHASE_0_READINESS.md) & [TEAM_WORKFLOW.md](TEAM_WORKFLOW.md)):**
+  - [ ] Isolated Rojo recovery validation on a local `.rbxl` copy (`0` duplicate Rojo-managed paths, creative assets preserved, smoke test output recorded).
+  - [ ] Jointly authorized shared-place recovery on `Project Horror` (`122077989749573`) with local backup and rollback plan.
+  - [ ] Solo and co-op runtime verification + isolated Checkpoint 5 `StalkerNavigator` run, reviewed by both leads before Phase 0 exit.
+
+---
+
 ## Gate 0: Pre-Implementation Baseline Sync — COMPLETED (`06a8608`, `80cde45`)
-- Merged `codex/flashlight-beam` (`47a8fae`) and `codex/blackpine-opening` (`e530a0f`) into `main`, deleted obsolete branches, and synced canonical [GAME_SPEC.md](file:///c:/Users/sanch/Projects/horror-game/GAME_SPEC.md).
+- Merged `codex/flashlight-beam` (`47a8fae`) and `codex/blackpine-opening` (`e530a0f`) into `main`, deleted obsolete branches, and synced canonical [GAME_SPEC.md](../GAME_SPEC.md).
 - Confirmed `ExitGate` builds dynamic bulkhead/levers at `lastRoom.Exit` when static Studio exit instances are absent.
 
 ---
@@ -40,9 +49,9 @@ Every milestone gate (`Gate 0`, `4A`, `4B`, `5A`, `5B`, `6A`, `6B`) verifies:
   - Added `SpectatorController` + `MatchScaleManager.revivePlayer` (`ClaimReviveToken` + `GiftFieldRevive`).
 - **Check-In 5B (Lobby & Monetization) — Code Complete on `feature/lobby` / Needs Multi-Place Live Test:**
   - [x] Build pre-run Dark Forest lobby (`lobby.project.json`, `LobbyScene`, animated Frog Merchant stall, campfire clearing, 3 play circles w/ Friends-Only support & reserved server teleport) and responsive `ViewportFrame` Shop UI (`ShopCatalog` character/weapon skins + DataStore persistence in `PlayerData_v1`).
-  - [ ] Publish dedicated Lobby Place inside the `Project Horror` universe (`122077989749573` destination) and execute [docs/LOBBY_TEST_CHECKLIST.md](file:///c:/Users/sanch/Projects/horror-game/docs/LOBBY_TEST_CHECKLIST.md).
-  - [ ] Populate Creator Dashboard numeric `productId` values in [src/shared/ShopCatalog.luau](file:///c:/Users/sanch/Projects/horror-game/src/shared/ShopCatalog.luau) and add Private Server / Chaos pass support if scoped for v1.
-  - [ ] **Open Polish Item:** Raise the concrete concourse ceiling lip above the cellar stairs inside [src/server/ForestCabin/Opening.rbxmx](file:///c:/Users/sanch/Projects/horror-game/src/server/ForestCabin/Opening.rbxmx) to eliminate the brief 3rd-person camera floor clip seen at `00:44` of `playtest_fixed.mp4`.
+  - [ ] Publish dedicated Lobby Place inside the `Project Horror` universe (`122077989749573` destination) and execute [docs/LOBBY_TEST_CHECKLIST.md](LOBBY_TEST_CHECKLIST.md).
+  - [ ] Populate Creator Dashboard numeric `productId` values in [src/shared/ShopCatalog.luau](../src/shared/ShopCatalog.luau) and add Private Server / Chaos pass support if scoped for v1.
+  - [ ] **Open Polish Item:** Raise the concrete concourse ceiling lip above the cellar stairs inside [src/server/ForestCabin/Opening.rbxmx](../src/server/ForestCabin/Opening.rbxmx) to eliminate the brief 3rd-person camera floor clip seen at `00:44` of `playtest_fixed.mp4`.
   - [ ] **Exit Gate:** Complete a 2–4 player live co-op test verifying simultaneous `ExitLever_A`/`B`, disconnect hold release, Stalker pathfinding across L-rooms, Deer Omen trigger on the trail, and mid-run revive flow.
 
 ---
@@ -55,7 +64,7 @@ Every milestone gate (`Gate 0`, `4A`, `4B`, `5A`, `5B`, `6A`, `6B`) verifies:
 
 ---
 
-## BunkerGrid Redesign (`feature/bunker-stalker-v1`) — Checkpoints 1–4 Verified / Checkpoint 5 Implemented (Awaiting Isolated Studio Run)
+## BunkerGrid Redesign — Checkpoints 1–4 Verified / Checkpoint 5 Merged on `main` (Runtime Pending)
 - [x] **Checkpoints 1–4:** Preserved `Config.luau`, `DoorResolver.luau`, `PrefabLibrary.luau`, `PrefabValidator.luau`, `HallwaySpineV1.luau`, `RoomAssignment.luau`, `ReachabilityValidator.luau`, and 15 active `.rbxm` prefabs alongside full Dark Forest Lobby and original gameplay (`RoomGenerator.generate(10)`).
-- [ ] **Checkpoint 5 (`StalkerNavigator.luau` & `Checkpoint5Test.luau`):** Implemented on `feature/bunker-stalker-v1` (inactive in live gameplay; `NPCManager.luau` untouched). Physical runtime tests require an isolated local Studio copy containing `ReplicatedStorage/NPCModels/MainNPC_Stalker`.
-- [ ] **Checkpoints 6–7 (Upcoming):** Side-monster scares and live `RoomGenerator` compatibility adapter.
+- [ ] **Checkpoint 5 (`StalkerNavigator.luau` & `Checkpoint5Test.luau`):** Source merged on `main` (`3878e6d3`, PR `#6`), inactive in live gameplay (`NPCManager.luau` untouched). Physical runtime verification remains pending an isolated local Studio run containing `ReplicatedStorage/NPCModels/MainNPC_Stalker` (see [PHASE_0_READINESS.md](PHASE_0_READINESS.md)).
+- [ ] **Checkpoints 6–7 (Upcoming):** Side-monster scares and live `RoomGenerator` compatibility adapter (outside the Phase 0 readiness gate unless separately approved).

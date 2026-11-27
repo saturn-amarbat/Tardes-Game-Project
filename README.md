@@ -11,7 +11,7 @@ Players begin stranded on the edge of the dense, fog-drenched Blackpine Forest. 
 ### Prerequisites & Toolchain Setup
 The project uses **[Rokit](https://github.com/rojo-rbx/rokit)** to manage Roblox development toolchains consistently across platforms (Windows & macOS).
 
-Tools configured in [rokit.toml](file:///c:/Users/sanch/Projects/horror-game/rokit.toml):
+Tools configured in [rokit.toml](rokit.toml):
 - **Rojo** (`7.7.1`) – Filesystem-to-Roblox synchronizer
 - **Wally** (`0.3.2`) – Package manager
 - **StyLua** (`2.6.0`) – Luau code formatter
@@ -32,6 +32,10 @@ rokit install
 ```
 
 #### 2. Start the Rojo Sync Server
+
+> [!IMPORTANT]
+> **Phase 0 Recovery Gate:** Do **not** start a Rojo sync against the shared `Project Horror` Team Create place until isolated local `.rbxl` recovery validation passes and both leads approve shared-place recovery (see [docs/PHASE_0_READINESS.md](docs/PHASE_0_READINESS.md)).
+
 ```bash
 # Serve the main place project
 rojo serve default.project.json
@@ -39,7 +43,7 @@ rojo serve default.project.json
 The server will bind to `http://localhost:34872`.
 
 #### 3. Connect Roblox Studio
-1. Open the project place in **Roblox Studio**.
+1. Open the target local recovery copy (or authorized development place) in **Roblox Studio**.
 2. Open the **Rojo Plugin** tab and click **Connect**.
 3. Confirm that scripts sync live from `src/` to their respective DataModel containers (`ServerScriptService`, `StarterPlayerScripts`, `ReplicatedStorage`).
 
@@ -49,23 +53,23 @@ The server will bind to `http://localhost:34872`.
 
 ## Critical Team Create & Sync Rules
 
-To prevent data loss, conflicts, and sync desynchronization:
+To prevent data loss, conflicts, and sync desynchronization (after clearing the Phase 0 recovery gate above):
 1. **Disable Collaborative Editing / Script Drafts**: In Roblox Studio Game Settings, Collaborative Editing / Drafts mode must be **OFF**. Rojo expects script changes to apply directly without draft conflicts.
 2. **Partially Managed Tree (`$ignoreUnknownInstances: true`)**:
-   [default.project.json](default.project.json) specifies `"$ignoreUnknownInstances": true` on `Workspace`, `ReplicatedStorage`, `ServerStorage`, `Lighting`, and `StarterGui`, while mapping `ServerStorage/BunkerPrefabs` to `assets/BunkerPrefabs/`. This ensures Rojo syncs tracked `.rbxm` bunker grid prefabs alongside `src/` and **never deletes** 3D maps, room templates, models, lighting configurations, or raw UI created in Studio Team Create.
-3. **No In-Studio Script Edits**: Never edit `.luau` scripts inside Roblox Studio via MCP (`multi_edit`) or the Studio script editor. All script modifications must happen on disk inside `src/` to guarantee clean Git version tracking and automated linting.
+   [default.project.json](default.project.json) specifies `"$ignoreUnknownInstances": true` on `Workspace`, `ReplicatedStorage`, `ServerStorage`, `ServerStorage/BunkerPrefabs`, `Lighting`, and `StarterGui`, while mapping `ServerStorage/BunkerPrefabs` to `assets/BunkerPrefabs/`. This keeps unknown sibling instances in those containers unmanaged during normal syncs, but it does **not** protect descendants inside tracked `.rbxm` models or unignored containers (`ServerScriptService/Server`, `StarterPlayerScripts/Client`) and does not prevent duplicate instances when Studio and Rojo ID maps diverge.
+3. **No In-Studio Script Edits**: Never edit `.luau` scripts inside Roblox Studio via MCP (`multi_edit`) or the Studio script editor. All script modifications must happen on disk inside `src/` to guarantee clean Git version tracking and local formatting/linting.
 
 ---
 
 ## Current Baseline & Team Split
 
-- **Current Baseline:** `main` at `fa845b6` (Roblox Studio Team Create **version `46`**). Create short-lived feature branches from `origin/main`.
+- **Audited Source Baseline (`2026-11-26`):** `main` source audited at `3878e6d3` (historical Team Create reference: **version `46`**; current shared Studio sync and runtime verification remain pending Phase 0 recovery in [docs/PHASE_0_READINESS.md](docs/PHASE_0_READINESS.md)). Create short-lived feature branches from freshly fetched `origin/main`.
 - **Opening flow.** Follow the amber survey stakes past the roadside deer omen (`DeerIntroRig`) to the Warden's Cottage. Find the brass kitchen key, unlock the hinged cellar hatch, and follow the pipe rail down to the concourse. At the survey lift, the first pull restores power for the whole squad (`SurveyRelay`); the next interaction boards each player individually.
 - **Dungeon Loop & Extraction.** Survive `10` procedurally snapped rooms (including a mid-run `ToadMakerSafeRoom` breather), gather clues/objectives + Run Scrap, and coordinate `ExitLever_A` / `ExitLever_B` (with 1 survivor fallback) to open the steel extraction bulkhead.
-- **Team Create.** Use the shared Project Horror place for authored room templates, NPC rigs, and `Realistic` lighting. Git tracks the opening model (`Opening.rbxmx`) and all Luau scripts under `src/`.
-- **Team Responsibilities**:
-  - **Technical Lead**: Owns `src/` (Luau codebase) via Rojo + Git, enforcing `--!strict`, modular services/controllers, and CI checks (`stylua`, `selene`).
-  - **Creative Lead**: Owns 3D geometry, environment art, [src/server/ForestCabin/Opening.rbxmx](file:///c:/Users/sanch/Projects/horror-game/src/server/ForestCabin/Opening.rbxmx), `ReplicatedStorage/RoomTemplates`, `ReplicatedStorage/NPCModels`, `Lighting`, audio instances, and raw UI layout in Team Create.
+- **Team Create.** Use the shared Project Horror place for authored room templates, NPC rigs, and `Realistic` lighting. Git tracks the opening model (`Opening.rbxmx`), 15 `.rbxm` grid prefabs under `assets/BunkerPrefabs/`, and all Luau scripts under `src/`.
+- **Team Responsibilities** (proposed record in [docs/TEAM_WORKFLOW.md](docs/TEAM_WORKFLOW.md)):
+  - **Engineering Lead**: Owns `src/` (Luau codebase) via Rojo + Git, enforcing `--!strict`, modular services/controllers, and local quality checks (`stylua --check src`, `selene src`).
+  - **Creative Lead**: Owns 3D geometry, environment art, [src/server/ForestCabin/Opening.rbxmx](src/server/ForestCabin/Opening.rbxmx), `ReplicatedStorage/RoomTemplates`, `ReplicatedStorage/NPCModels`, `Lighting`, audio instances, and raw UI layout in Team Create.
 
 ---
 
@@ -73,17 +77,20 @@ To prevent data loss, conflicts, and sync desynchronization:
 
 Detailed specifications, design documentation, and architectural guidelines are maintained in the repository:
 
-- [GAME_SPEC.md](file:///c:/Users/sanch/Projects/horror-game/GAME_SPEC.md) – **Canonical Single Source of Truth** (core loop, multiplayer/revive rules, Toad-Maker safe room, NPC contracts, and v1 launch scope).
-- [AGENTS.md](file:///c:/Users/sanch/Projects/horror-game/AGENTS.md) – Strict tool boundaries, role splits, and development constraints.
-- [docs/DECISIONS_AND_CHANGELOG.md](file:///c:/Users/sanch/Projects/horror-game/docs/DECISIONS_AND_CHANGELOG.md) – **Architectural Decision Records & Engineering Log** (what changed and *why* each decision was made).
-- [docs/MILESTONES_AND_CHECKINS.md](file:///c:/Users/sanch/Projects/horror-game/docs/MILESTONES_AND_CHECKINS.md) – Milestone gates, check-in protocol, and current progress tracker.
-- [docs/GAME_DESIGN_AND_RESEARCH.md](file:///c:/Users/sanch/Projects/horror-game/docs/GAME_DESIGN_AND_RESEARCH.md) – Core gameplay loop, story beats, horror research, co-op scaling, monetization/retention, and proposed roadmap.
-- [docs/ARCHITECTURE_AND_WORKFLOW.md](file:///c:/Users/sanch/Projects/horror-game/docs/ARCHITECTURE_AND_WORKFLOW.md) – Client/Server/Shared module map, Rojo sync rules, `StreamingEnabled` safety, input contracts, and Git branch workflows.
-- [docs/STUDIO_ASSET_SPEC.md](file:///c:/Users/sanch/Projects/horror-game/docs/STUDIO_ASSET_SPEC.md) – Studio instance names, anchor contracts, streaming configurations, audio hooks, and UI button hierarchy.
-- [docs/blackpine-survey-works.md](file:///c:/Users/sanch/Projects/horror-game/docs/blackpine-survey-works.md) – Bunker survey gallery environment art pass & `SurveyMount` handoff.
-- [docs/milestone-3-release.md](file:///c:/Users/sanch/Projects/horror-game/docs/milestone-3-release.md) – Milestone 3 test record & extraction notes.
-- [docs/forest-cabin-handoff.md](file:///c:/Users/sanch/Projects/horror-game/docs/forest-cabin-handoff.md) – Historical environment handoff document for the Blackpine Forest and cabin opening.
-- [docs/LOBBY_TEST_CHECKLIST.md](file:///c:/Users/sanch/Projects/horror-game/docs/LOBBY_TEST_CHECKLIST.md) – Pre-game Dark Forest Lobby QA checklist.
+- [GAME_SPEC.md](GAME_SPEC.md) – **Canonical Single Source of Truth** (core loop, multiplayer/revive rules, Toad-Maker safe room, NPC contracts, and v1 launch scope).
+- [AGENTS.md](AGENTS.md) – Strict tool boundaries, role splits, isolation gates, and development constraints.
+- [docs/PHASE_0_READINESS.md](docs/PHASE_0_READINESS.md) – **Phase 0 Readiness & Recovery Gates** (current open recovery sequence and exit criteria).
+- [docs/TEAM_WORKFLOW.md](docs/TEAM_WORKFLOW.md) – **Team Ownership & Agent Workflow** (Engineering/Creative split, Antigravity/Codex/ChatGPT roles, handoff rules).
+- [docs/TARDES_Engineering_Handoff_Report.md](docs/TARDES_Engineering_Handoff_Report.md) – **Engineering Handoff Summary** (reconstructed handoff record and open evidence list).
+- [docs/DECISIONS_AND_CHANGELOG.md](docs/DECISIONS_AND_CHANGELOG.md) – **Architectural Decision Records & Engineering Log** (what changed and *why* each decision was made).
+- [docs/MILESTONES_AND_CHECKINS.md](docs/MILESTONES_AND_CHECKINS.md) – Milestone gates, check-in protocol, and current progress tracker.
+- [docs/GAME_DESIGN_AND_RESEARCH.md](docs/GAME_DESIGN_AND_RESEARCH.md) – Core gameplay loop, story beats, horror research, co-op scaling, monetization/retention, and proposed roadmap.
+- [docs/ARCHITECTURE_AND_WORKFLOW.md](docs/ARCHITECTURE_AND_WORKFLOW.md) – Client/Server/Shared module map, Rojo sync rules, `StreamingEnabled` safety, input contracts, and Git branch workflows.
+- [docs/STUDIO_ASSET_SPEC.md](docs/STUDIO_ASSET_SPEC.md) – Studio instance names, anchor contracts, streaming configurations, audio hooks, and UI button hierarchy.
+- [docs/blackpine-survey-works.md](docs/blackpine-survey-works.md) – Bunker survey gallery environment art pass & `SurveyMount` handoff.
+- [docs/milestone-3-release.md](docs/milestone-3-release.md) – Milestone 3 test record & extraction notes.
+- [docs/forest-cabin-handoff.md](docs/forest-cabin-handoff.md) – Historical environment handoff document for the Blackpine Forest and cabin opening.
+- [docs/LOBBY_TEST_CHECKLIST.md](docs/LOBBY_TEST_CHECKLIST.md) – Pre-game Dark Forest Lobby QA checklist.
 
 ---
 
@@ -143,8 +150,8 @@ Every time a squad enters the bunker (`MatchScaleManager.reset()` $\to$ `RoomGen
 - **8 Modular Topologies** (`Spine & Pockets`, `Twin-Wing Crossroads`, `Spiral Switchback`, `Grand Atrium Hubs`, `Sublevel Bypass Grid`, `Maintenance Gauntlet`, `Shattered Labyrinth`, `Deep Vault Sector`) combining `RoomTemplates` with procedural `CrossHub`, `TJunctionL/R`, `CornerLeft/Right`, `SplitCourt`, `StepGallery`, and sealed branching wing vaults.
 - **8 Wall/Corner Decoration Sets** (`Supply Crates`, `Bio-Fungal Overgrowth`, `Power Conduits`, `Survey Archives`, `Boilers & Valves`, `Lockdown Barricades`, `Abandoned Quarters`, `Anomaly Salvage Caches`) placed via collision-safe raycasts along perimeter walls without obstructing doorways or `MainNPC_Stalker` paths.
 
-### Modular Grid Bunker Prefabs (`src/server/BunkerGrid/`, Checkpoints 1–4, Inactive)
-Checkpoints 1–4 of the uniform-grid bunker redesign are preserved on `integration/lobby-bunker-v1` (inactive in live gameplay; `RoomGenerator.generate(10)` remains active):
+### Modular Grid Bunker Prefabs (`src/server/BunkerGrid/`, Checkpoints 1–5, Inactive)
+Checkpoints 1–5 of the uniform-grid bunker redesign are merged on `main` (`3878e6d3`) and remain **inactive in live gameplay** (`RoomGenerator.generate(10)` remains active via `src/server/init.server.luau`):
 - **Single Source of Truth (`src/server/BunkerGrid/Config.luau`):** Locks `CELL = 32`, `WALL_H = 12`, `WALL_T = 1`, `DOOR_W = 8`, `DOOR_H = 9`, `HALL_W = 16`, `ROOM_COUNT = 10`, Stalker Pathfinding (`AGENT_RADIUS = 2.0`, `AGENT_HEIGHT = 7.0`, `AGENT_CAN_JUMP = false`, `REPATH_INTERVAL = 0.35`), and chase-loop constraints (`1–2` loops, `3×3` minimum).
-- **4-Bit NESW Resolver, Spine & Reachability:** `DoorResolver.luau` maps all 15 4-bit door masks; `HallwaySpineV1.luau` + `RoomAssignment.luau` generate a validated 12-cell spine with a `3×3` chase loop and seeded `Room_Exit`-last ordering; `ReachabilityValidator.luau` performs bounded async `PathfindingService` checks.
-- **Tracked Binary Models (`assets/BunkerPrefabs/*.rbxm`):** Syncs all 15 active modular prefabs (`5` hallways + `10` rooms; `Room_Abandoned` consolidated into `Room_Mirror`) into `ServerStorage/BunkerPrefabs` via [default.project.json](default.project.json). *(Checkpoints 5–7 remain upcoming.)*
+- **4-Bit NESW Resolver, Spine, Reachability & Navigator:** `DoorResolver.luau` maps all 15 4-bit door masks; `HallwaySpineV1.luau` + `RoomAssignment.luau` generate a validated 12-cell spine with a `3×3` chase loop and seeded `Room_Exit`-last ordering; `ReachabilityValidator.luau` performs bounded async `PathfindingService` checks; `StalkerNavigator.luau` + `Checkpoint5Test.luau` (PR `#6`) are present on `main` with runtime execution pending an isolated Studio test.
+- **Tracked Binary Models (`assets/BunkerPrefabs/*.rbxm`):** Syncs all 15 active modular prefabs (`5` hallways + `10` rooms; `Room_Abandoned` consolidated into `Room_Mirror` in Git) into `ServerStorage/BunkerPrefabs` via [default.project.json](default.project.json). *(Checkpoints 6–7 remain upcoming and outside the Phase 0 readiness gate.)*

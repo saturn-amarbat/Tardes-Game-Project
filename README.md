@@ -32,6 +32,10 @@ rokit install
 ```
 
 #### 2. Start the Rojo Sync Server
+
+> [!IMPORTANT]
+> **Phase 0 Recovery Gate:** Do **not** start a Rojo sync against the shared `Project Horror` Team Create place until isolated local `.rbxl` recovery validation passes and both leads approve shared-place recovery (see [docs/PHASE_0_READINESS.md](docs/PHASE_0_READINESS.md)).
+
 ```bash
 # Serve the main place project
 rojo serve default.project.json
@@ -39,7 +43,7 @@ rojo serve default.project.json
 The server will bind to `http://localhost:34872`.
 
 #### 3. Connect Roblox Studio
-1. Open the project place in **Roblox Studio**.
+1. Open the target local recovery copy (or authorized development place) in **Roblox Studio**.
 2. Open the **Rojo Plugin** tab and click **Connect**.
 3. Confirm that scripts sync live from `src/` to their respective DataModel containers (`ServerScriptService`, `StarterPlayerScripts`, `ReplicatedStorage`).
 
@@ -49,14 +53,11 @@ The server will bind to `http://localhost:34872`.
 
 ## Critical Team Create & Sync Rules
 
-> [!IMPORTANT]
-> **Phase 0 Recovery Gate:** Do **not** connect Rojo directly to the shared `Project Horror` Team Create place until isolated recovery validation passes and both leads approve shared-place recovery (see [docs/PHASE_0_READINESS.md](docs/PHASE_0_READINESS.md)).
-
-To prevent data loss, conflicts, and sync desynchronization:
+To prevent data loss, conflicts, and sync desynchronization (after clearing the Phase 0 recovery gate above):
 1. **Disable Collaborative Editing / Script Drafts**: In Roblox Studio Game Settings, Collaborative Editing / Drafts mode must be **OFF**. Rojo expects script changes to apply directly without draft conflicts.
 2. **Partially Managed Tree (`$ignoreUnknownInstances: true`)**:
    [default.project.json](default.project.json) specifies `"$ignoreUnknownInstances": true` on `Workspace`, `ReplicatedStorage`, `ServerStorage`, `ServerStorage/BunkerPrefabs`, `Lighting`, and `StarterGui`, while mapping `ServerStorage/BunkerPrefabs` to `assets/BunkerPrefabs/`. This keeps unknown sibling instances in those containers unmanaged during normal syncs, but it does **not** protect descendants inside tracked `.rbxm` models or unignored containers (`ServerScriptService/Server`, `StarterPlayerScripts/Client`) and does not prevent duplicate instances when Studio and Rojo ID maps diverge.
-3. **No In-Studio Script Edits**: Never edit `.luau` scripts inside Roblox Studio via MCP (`multi_edit`) or the Studio script editor. All script modifications must happen on disk inside `src/` to guarantee clean Git version tracking and automated linting.
+3. **No In-Studio Script Edits**: Never edit `.luau` scripts inside Roblox Studio via MCP (`multi_edit`) or the Studio script editor. All script modifications must happen on disk inside `src/` to guarantee clean Git version tracking and local formatting/linting.
 
 ---
 
@@ -67,7 +68,7 @@ To prevent data loss, conflicts, and sync desynchronization:
 - **Dungeon Loop & Extraction.** Survive `10` procedurally snapped rooms (including a mid-run `ToadMakerSafeRoom` breather), gather clues/objectives + Run Scrap, and coordinate `ExitLever_A` / `ExitLever_B` (with 1 survivor fallback) to open the steel extraction bulkhead.
 - **Team Create.** Use the shared Project Horror place for authored room templates, NPC rigs, and `Realistic` lighting. Git tracks the opening model (`Opening.rbxmx`), 15 `.rbxm` grid prefabs under `assets/BunkerPrefabs/`, and all Luau scripts under `src/`.
 - **Team Responsibilities** (proposed record in [docs/TEAM_WORKFLOW.md](docs/TEAM_WORKFLOW.md)):
-  - **Engineering Lead**: Owns `src/` (Luau codebase) via Rojo + Git, enforcing `--!strict`, modular services/controllers, and CI checks (`stylua`, `selene`).
+  - **Engineering Lead**: Owns `src/` (Luau codebase) via Rojo + Git, enforcing `--!strict`, modular services/controllers, and local quality checks (`stylua --check src`, `selene src`).
   - **Creative Lead**: Owns 3D geometry, environment art, [src/server/ForestCabin/Opening.rbxmx](src/server/ForestCabin/Opening.rbxmx), `ReplicatedStorage/RoomTemplates`, `ReplicatedStorage/NPCModels`, `Lighting`, audio instances, and raw UI layout in Team Create.
 
 ---

@@ -11,10 +11,15 @@
 3. Code Standards: Every `.luau` file uses `--!strict`, modular Services/Controllers, and passes `stylua --check src` + `selene src`.
 4. Streaming & Teleport Safety: All procedural room models require `ModelStreamingMode = Atomic`. Always call `Player:RequestStreamAroundAsync()` before CFrame teleports.
 5. Approval & Isolation Gate: Validate Rojo recovery and tracked asset replacements in an isolated local Studio copy before touching the shared Team Create place. Structural changes, shared-place recovery, asset replacement, milestone exit, and publishing require explicit approval from both leads.
-6. Evidence Discipline: Distinguish source-verified, runtime-verified, reported, proposed, and jointly approved states. Never cite a conversation, chat summary, or static `rojo build` as proof of Studio runtime readiness.
+6. Ongoing Agent Discipline:
+   - Inspect current `origin/main`, active branches, and existing code/modules before implementing to avoid duplicating existing systems or teammate work.
+   - Respect Engineering vs. Creative ownership boundaries; read only the documentation relevant to the assigned task (start here, then check only task-relevant specs).
+   - Update affected documentation (`MILESTONES_AND_CHECKINS.md`, `DECISIONS_AND_CHANGELOG.md`, `STUDIO_ASSET_SPEC.md`, or `GAME_SPEC.md`) concisely when implementation or approved decisions change—avoid redundant docs or excessive process overhead.
+   - Distinguish source implementation from runtime verification; never cite a conversation, chat summary, or static `rojo build` as proof of Studio runtime readiness.
+   - Report actual test evidence, unresolved blockers, and integration dependencies after every task.
 
 ## Repository Documentation
-Consult project specifications and architectural guides before making structural changes:
+Read only the specifications relevant to your assigned task before making changes:
 - [GAME_SPEC.md](GAME_SPEC.md): Canonical Single Source of Truth for vision, core loop, death/revive rules, NPCs, and v1 launch scope.
 - [README.md](README.md): Project overview, toolchain quickstart, Team Create sync rules, and audited source baseline.
 - [docs/PHASE_0_READINESS.md](docs/PHASE_0_READINESS.md): Open Phase 0 recovery sequence, verification gates, and readiness exit criteria.

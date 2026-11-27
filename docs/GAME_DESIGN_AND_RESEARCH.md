@@ -88,7 +88,7 @@
     3. *Chase*: Preceded by a terrifying audio telegraph (`Workspace.Sounds.StalkerTelegraph`) giving players 1.5 seconds to sprint, break line of sight, or regroup.
 
 ### Beat 5: *The Forest* / Timmy-Style Environmental Clues
-Scattered across room furniture, notice boards, and concrete walls are 7 environmental clues ([src/shared/ClueData.luau](file:///c:/Users/sanch/Projects/horror-game/src/shared/ClueData.luau)):
+Scattered across room furniture, notice boards, and concrete walls are 7 environmental clues ([src/shared/ClueData.luau](../src/shared/ClueData.luau)):
 - **Torn Notebook Page (`CLUE_NOTE_01`)**: Notes detailing generator failure at 2 AM and movements outside the treeline.
 - **Maintenance Log (`CLUE_NOTE_02`)**: Clues to fuse box locations in storage lockers ("GREEN panel, NOT red").
 - **Wall Scribble (`CLUE_WALL_01`)**: Scrawled in dark pigment: *"IT COMES WHEN THE LIGHT DIES"*.
@@ -101,7 +101,7 @@ Scattered across room furniture, notice boards, and concrete walls are 7 environ
 
 ## 4. 1–4 Player Dynamic Party Scaling
 
-The game dynamically calibrates challenge based on player headcount ([src/server/MatchScaleManager.luau](file:///c:/Users/sanch/Projects/horror-game/src/server/MatchScaleManager.luau)):
+The game dynamically calibrates challenge based on player headcount ([src/server/MatchScaleManager.luau](../src/server/MatchScaleManager.luau)):
 
 | Player Count | Required Keys | Required Fuses | Co-op Exit Mechanic | Squad Teleport Spread |
 | :---: | :---: | :---: | :---: | :---: |

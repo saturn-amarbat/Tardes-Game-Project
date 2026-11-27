@@ -17,7 +17,7 @@ This document defines the exact instance names, hierarchy paths, property contra
 
 ## 2. Procedural Room Templates (`ReplicatedStorage/RoomTemplates`)
 
-[src/server/RoomGenerator.luau](file:///c:/Users/sanch/Projects/horror-game/src/server/RoomGenerator.luau) clones templates from `ReplicatedStorage.RoomTemplates`.
+[src/server/RoomGenerator.luau](../src/server/RoomGenerator.luau) clones templates from `ReplicatedStorage.RoomTemplates`.
 
 ### Current Templates
 ```

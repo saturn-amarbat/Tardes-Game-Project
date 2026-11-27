@@ -1,0 +1,22 @@
+# Default joint ownership for root files and uncategorized paths
+* @saturn-amarbat @Eyestain
+
+# Engineering Lead owns Luau code and toolchain manifests
+/src/ @saturn-amarbat
+/rokit.toml @saturn-amarbat
+/selene.toml @saturn-amarbat
+/wally.toml @saturn-amarbat
+
+# Tracked binary/XML Studio models require Creative authoring + Engineering integration review
+/src/server/ForestCabin/Opening.rbxmx @Eyestain @saturn-amarbat
+/assets/ @Eyestain @saturn-amarbat
+
+# Shared specifications, Rojo configs, documentation, and governance require both leads
+/GAME_SPEC.md @saturn-amarbat @Eyestain
+/AGENTS.md @saturn-amarbat @Eyestain
+/README.md @saturn-amarbat @Eyestain
+/docs/ @saturn-amarbat @Eyestain
+/default.project.json @saturn-amarbat @Eyestain
+/lobby.project.json @saturn-amarbat @Eyestain
+/forest-preview.project.json @saturn-amarbat @Eyestain
+/.github/ @saturn-amarbat @Eyestain

@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Format, Lint & Rojo Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install pinned toolchain via Rokit
+        uses: paradoxum-games/setup-rokit@v3
+        with:
+          version: "1.2.0"
+          cache: true
+          token: ${{ github.token }}
+
+      - name: Check toolchain versions
+        run: |
+          stylua --version
+          selene --version
+          rojo --version
+
+      - name: Check formatting (StyLua)
+        run: stylua --check src
+
+      - name: Lint Luau (Selene)
+        run: selene src
+
+      - name: Validate Rojo project builds
+        run: |
+          rojo build default.project.json -o "$RUNNER_TEMP/default.rbxl"
+          rojo build lobby.project.json -o "$RUNNER_TEMP/lobby.rbxl"
+          rojo build forest-preview.project.json -o "$RUNNER_TEMP/forest-preview.rbxl"
